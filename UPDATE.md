@@ -8,6 +8,7 @@
 - Added fixture export/import endpoints (`/fixtures/export`, `/fixtures/import`).
 - Added `mode=merge` for fixture import (upsert without deleting existing data).
 - Added `POST /workspaces`, `POST /users`, and `GET /users/{user_id}` to create and fetch users.
+- Added update/delete endpoints for pages/databases/rows and basic FK validation on create endpoints.
 
 ## How to run
 ```bash

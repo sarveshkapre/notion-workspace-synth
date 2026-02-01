@@ -159,3 +159,81 @@ def test_fixtures_export_import_roundtrip() -> None:
     assert merged_stats["pages"] == body["inserted"]["pages"] + 1
     extra_pages = client_c.get("/pages?title_contains=Extra%20Page").json()
     assert len(extra_pages) == 1
+
+
+def test_delete_page_also_deletes_comments() -> None:
+    client = _client()
+    seeded_comments = client.get("/comments?page_id=page_home").json()
+    assert len(seeded_comments) == 1
+
+    deleted = client.delete("/pages/page_home")
+    assert deleted.status_code == 204
+    assert client.get("/pages/page_home").status_code == 404
+    assert client.get("/comments?page_id=page_home").json() == []
+
+
+def test_database_update_delete_and_rows_crud() -> None:
+    client = _client()
+
+    created_db = client.post(
+        "/databases",
+        json={
+            "workspace_id": "ws_demo",
+            "name": "Tickets",
+            "schema": {"properties": {"Title": {"type": "title"}}},
+        },
+    )
+    assert created_db.status_code == 201
+    db_id = created_db.json()["id"]
+
+    updated_db = client.patch(f"/databases/{db_id}", json={"name": "Tickets v2"})
+    assert updated_db.status_code == 200
+    assert updated_db.json()["name"] == "Tickets v2"
+
+    created_row = client.post(
+        f"/databases/{db_id}/rows",
+        json={"properties": {"Title": "Hello"}},
+    )
+    assert created_row.status_code == 201
+    row_id = created_row.json()["id"]
+
+    fetched_row = client.get(f"/databases/{db_id}/rows/{row_id}")
+    assert fetched_row.status_code == 200
+    assert fetched_row.json()["properties"]["Title"] == "Hello"
+
+    updated_row = client.patch(
+        f"/databases/{db_id}/rows/{row_id}",
+        json={"properties": {"Title": "Hello v2"}},
+    )
+    assert updated_row.status_code == 200
+    assert updated_row.json()["properties"]["Title"] == "Hello v2"
+
+    deleted_row = client.delete(f"/databases/{db_id}/rows/{row_id}")
+    assert deleted_row.status_code == 204
+    assert client.get(f"/databases/{db_id}/rows/{row_id}").status_code == 404
+
+    deleted_db = client.delete(f"/databases/{db_id}")
+    assert deleted_db.status_code == 204
+    assert client.get(f"/databases/{db_id}").status_code == 404
+
+
+def test_create_database_rejects_invalid_workspace() -> None:
+    client = _client()
+    created_db = client.post(
+        "/databases",
+        json={
+            "workspace_id": "ws_does_not_exist",
+            "name": "X",
+            "schema": {"properties": {"Title": {"type": "title"}}},
+        },
+    )
+    assert created_db.status_code == 400
+
+
+def test_create_database_row_rejects_invalid_database() -> None:
+    client = _client()
+    created_row = client.post(
+        "/databases/db_does_not_exist/rows",
+        json={"properties": {"Title": "X"}},
+    )
+    assert created_row.status_code == 400

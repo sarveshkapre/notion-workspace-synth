@@ -43,6 +43,12 @@ curl -X POST "http://localhost:8000/fixtures/import?mode=replace" -H "content-ty
 curl -X POST "http://localhost:8000/fixtures/import?mode=merge" -H "content-type: application/json" --data-binary @fixture.json
 ```
 
+Update/delete:
+```bash
+curl -X PATCH http://localhost:8000/databases/db_tasks -H "content-type: application/json" -d '{"name":"Task Board v2"}'
+curl -X DELETE http://localhost:8000/pages/page_home
+```
+
 ## Configuration
 - `NOTION_SYNTH_DB` (optional): path to SQLite DB file. Default: `./notion_synth.db`
 

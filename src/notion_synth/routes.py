@@ -12,6 +12,8 @@ from notion_synth.models import (
     DatabaseCreate,
     DatabaseRow,
     DatabaseRowCreate,
+    DatabaseRowUpdate,
+    DatabaseUpdate,
     Fixture,
     FixtureImportResult,
     Page,
@@ -629,6 +631,10 @@ def get_page(page_id: str, request: Request) -> Page:
 @router.post("/pages", response_model=Page, status_code=201)
 def create_page(payload: PageCreate, request: Request) -> Page:
     db = _get_db(request)
+    workspace = db.query_one("SELECT id FROM workspaces WHERE id = ?", [payload.workspace_id])
+    if workspace is None:
+        raise HTTPException(status_code=400, detail="Invalid workspace_id")
+
     now = _utc_now()
     page_id = new_id("page")
     db.execute(
@@ -690,6 +696,26 @@ def update_page(page_id: str, payload: PageUpdate, request: Request) -> Page:
     return Page(**updated)
 
 
+@router.delete("/pages/{page_id}", status_code=204)
+def delete_page(page_id: str, request: Request) -> Response:
+    db = _get_db(request)
+    row = db.query_one("SELECT id FROM pages WHERE id = ?", [page_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    conn = db.connection
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        cursor.execute("DELETE FROM comments WHERE page_id = ?", [page_id])
+        cursor.execute("DELETE FROM pages WHERE id = ?", [page_id])
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete page") from exc
+
+    return Response(status_code=204)
+
 @router.get("/databases", response_model=list[DatabaseModel])
 def list_databases(
     request: Request,
@@ -744,6 +770,10 @@ def get_database(database_id: str, request: Request) -> DatabaseModel:
 @router.post("/databases", response_model=DatabaseModel, status_code=201)
 def create_database(payload: DatabaseCreate, request: Request) -> DatabaseModel:
     db = _get_db(request)
+    workspace = db.query_one("SELECT id FROM workspaces WHERE id = ?", [payload.workspace_id])
+    if workspace is None:
+        raise HTTPException(status_code=400, detail="Invalid workspace_id")
+
     now = _utc_now()
     database_id = new_id("db")
     db.execute(
@@ -762,6 +792,50 @@ def create_database(payload: DatabaseCreate, request: Request) -> DatabaseModel:
         updated_at=now,
     )
 
+
+@router.patch("/databases/{database_id}", response_model=DatabaseModel)
+def update_database(database_id: str, payload: DatabaseUpdate, request: Request) -> DatabaseModel:
+    db = _get_db(request)
+    row = db.query_one("SELECT * FROM databases WHERE id = ?", [database_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Database not found")
+
+    if payload.name is None and payload.schema_ is None:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updated = dict(row)
+    if payload.name is not None:
+        updated["name"] = payload.name
+    if payload.schema_ is not None:
+        updated["schema_json"] = json.dumps(payload.schema_)
+    updated["updated_at"] = _utc_now()
+    db.execute(
+        "UPDATE databases SET name = ?, schema_json = ?, updated_at = ? WHERE id = ?",
+        [updated["name"], updated["schema_json"], updated["updated_at"], database_id],
+    )
+    updated["schema"] = _parse_json(updated.pop("schema_json"))
+    return DatabaseModel(**updated)
+
+
+@router.delete("/databases/{database_id}", status_code=204)
+def delete_database(database_id: str, request: Request) -> Response:
+    db = _get_db(request)
+    row = db.query_one("SELECT id FROM databases WHERE id = ?", [database_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Database not found")
+
+    conn = db.connection
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        cursor.execute("DELETE FROM database_rows WHERE database_id = ?", [database_id])
+        cursor.execute("DELETE FROM databases WHERE id = ?", [database_id])
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete database") from exc
+
+    return Response(status_code=204)
 
 @router.get("/databases/{database_id}/rows", response_model=list[DatabaseRow])
 def list_database_rows(
@@ -797,6 +871,10 @@ def create_database_row(
     database_id: str, payload: DatabaseRowCreate, request: Request
 ) -> DatabaseRow:
     db = _get_db(request)
+    database = db.query_one("SELECT id FROM databases WHERE id = ?", [database_id])
+    if database is None:
+        raise HTTPException(status_code=400, detail="Invalid database_id")
+
     now = _utc_now()
     row_id = new_id("row")
     db.execute(
@@ -814,6 +892,60 @@ def create_database_row(
         updated_at=now,
     )
 
+
+@router.get("/databases/{database_id}/rows/{row_id}", response_model=DatabaseRow)
+def get_database_row(database_id: str, row_id: str, request: Request) -> DatabaseRow:
+    db = _get_db(request)
+    row = db.query_one(
+        "SELECT * FROM database_rows WHERE id = ? AND database_id = ?",
+        [row_id, database_id],
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Database row not found")
+    data = dict(row)
+    data["properties"] = _parse_json(data.pop("properties_json"))
+    return DatabaseRow(**data)
+
+
+@router.patch("/databases/{database_id}/rows/{row_id}", response_model=DatabaseRow)
+def update_database_row(
+    database_id: str, row_id: str, payload: DatabaseRowUpdate, request: Request
+) -> DatabaseRow:
+    db = _get_db(request)
+    row = db.query_one(
+        "SELECT * FROM database_rows WHERE id = ? AND database_id = ?",
+        [row_id, database_id],
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Database row not found")
+    if payload.properties is None:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updated = dict(row)
+    updated["properties_json"] = json.dumps(payload.properties)
+    updated["updated_at"] = _utc_now()
+    db.execute(
+        """
+        UPDATE database_rows
+        SET properties_json = ?, updated_at = ?
+        WHERE id = ? AND database_id = ?
+        """,
+        [updated["properties_json"], updated["updated_at"], row_id, database_id],
+    )
+    updated["properties"] = _parse_json(updated.pop("properties_json"))
+    return DatabaseRow(**updated)
+
+
+@router.delete("/databases/{database_id}/rows/{row_id}", status_code=204)
+def delete_database_row(database_id: str, row_id: str, request: Request) -> Response:
+    db = _get_db(request)
+    cursor = db.execute(
+        "DELETE FROM database_rows WHERE id = ? AND database_id = ?",
+        [row_id, database_id],
+    )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Database row not found")
+    return Response(status_code=204)
 
 @router.get("/comments", response_model=list[Comment])
 def list_comments(
@@ -852,6 +984,13 @@ def list_comments(
 @router.post("/comments", response_model=Comment, status_code=201)
 def create_comment(payload: CommentCreate, request: Request) -> Comment:
     db = _get_db(request)
+    page = db.query_one("SELECT id FROM pages WHERE id = ?", [payload.page_id])
+    if page is None:
+        raise HTTPException(status_code=400, detail="Invalid page_id")
+    author = db.query_one("SELECT id FROM users WHERE id = ?", [payload.author_id])
+    if author is None:
+        raise HTTPException(status_code=400, detail="Invalid author_id")
+
     now = _utc_now()
     comment_id = new_id("comment")
     db.execute(

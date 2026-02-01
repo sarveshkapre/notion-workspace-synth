@@ -30,8 +30,9 @@ More details: `docs/PROJECT.md`
 - Added fixture export/import endpoints for deterministic demo bundles.
 - Added `mode=merge` fixture import for upsert-style iterative demos.
 - Added `POST /workspaces` and `POST /users` to create data beyond the seed.
+- Added update/delete endpoints for pages/databases/rows, plus basic FK validations on create endpoints.
 
 ## Ship next (tight scope)
 - Add parent filtering for databases/rows where relevant (and document conventions).
 - Add request/response examples to docs for common flows (create page, create db, insert row).
-- Add update/delete endpoints for pages/databases/rows as needed for fuller flows.
+- Add delete endpoints for users/comments with safe cascade semantics.

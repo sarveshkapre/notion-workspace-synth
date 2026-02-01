@@ -86,8 +86,19 @@ class DatabaseCreate(BaseModel):
     schema_: dict[str, Any] = Field(alias="schema")
 
 
+class DatabaseUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str | None = None
+    schema_: dict[str, Any] | None = Field(default=None, alias="schema")
+
+
 class DatabaseRowCreate(BaseModel):
     properties: dict[str, Any]
+
+
+class DatabaseRowUpdate(BaseModel):
+    properties: dict[str, Any] | None = None
 
 
 class CommentCreate(BaseModel):
