@@ -3,6 +3,16 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class Stats(BaseModel):
+    db_path: str
+    workspaces: int
+    users: int
+    pages: int
+    databases: int
+    database_rows: int
+    comments: int
+
+
 class Workspace(BaseModel):
     id: str
     name: str

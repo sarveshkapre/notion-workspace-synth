@@ -20,6 +20,6 @@
 - Docs: `GET /docs`
 
 ## Next 3 improvements
-1. Add filtering on pages/databases by parent.
-2. Add export/import fixtures for demo datasets.
-3. Add pagination metadata in list responses.
+1. Add export/import fixtures for demo datasets.
+2. Add request/response examples for common flows.
+3. Add richer synthetic fixture packs (optional).

@@ -7,6 +7,8 @@ Synthetic Notion-like workspace API with seeded demo org. Use it to generate rea
 - Deterministic demo org seeding on first run
 - Simple REST API with JSON payloads
 - Local-first SQLite storage (no auth required)
+- Optional `X-Total-Count` totals on list endpoints (`include_total=true`)
+- Built-in landing page (`/`) and dataset stats (`/stats`)
 
 ## Quickstart
 ```bash
@@ -21,6 +23,11 @@ API docs:
 ## Example
 ```bash
 curl http://localhost:8000/pages
+```
+
+Totals via response header:
+```bash
+curl -i "http://localhost:8000/pages?include_total=true"
 ```
 
 ## Configuration

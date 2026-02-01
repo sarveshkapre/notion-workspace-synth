@@ -1,9 +1,9 @@
 # ROADMAP
 
 ## Near-term
-- Add filter parameters for list endpoints (parent/workspace).
-- Add exportable seed bundles.
+- Add exportable seed bundles (import/export fixtures).
 - Add request/response examples in docs.
+- Add more realistic synthetic fixtures (optional packs).
 
 ## Later
 - Add synthetic file attachments metadata.

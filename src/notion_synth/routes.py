@@ -2,7 +2,8 @@ import json
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import HTMLResponse
 
 from notion_synth.db import Database, new_id
 from notion_synth.models import (
@@ -14,6 +15,7 @@ from notion_synth.models import (
     Page,
     PageCreate,
     PageUpdate,
+    Stats,
     User,
     Workspace,
 )
@@ -38,13 +40,193 @@ def _limit_offset(limit: int, offset: int) -> tuple[int, int]:
     return limit, offset
 
 
+def _set_total_header(response: Response, total: int) -> None:
+    response.headers["X-Total-Count"] = str(total)
+
+
 def _parse_json(value: str) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(value))
+
+
+def _homepage_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notion Workspace Synth</title>
+    <style>
+      :root{
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #111111;
+        --muted: #6b7280;
+        --card: #f5f5f7;
+        --border: #e5e7eb;
+        --link: #2563eb;
+        --code: #111827;
+      }
+      @media (prefers-color-scheme: dark){
+        :root{
+          --bg: #0b0b0f;
+          --fg: #f5f5f7;
+          --muted: #9ca3af;
+          --card: #14141b;
+          --border: #262631;
+          --link: #60a5fa;
+          --code: #e5e7eb;
+        }
+      }
+      body{
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+        line-height: 1.5;
+      }
+      a{color: var(--link); text-decoration: none}
+      a:hover{text-decoration: underline}
+      a:focus-visible{
+        outline: 2px solid var(--link);
+        outline-offset: 2px;
+        border-radius: 6px;
+      }
+      main{max-width: 960px; margin: 0 auto; padding: 28px 16px}
+      header{
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      h1{font-size: 24px; margin: 0}
+      .muted{color: var(--muted); font-size: 14px; margin: 6px 0 0}
+      .grid{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .card{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .card h2{
+        font-size: 14px;
+        margin: 0 0 10px;
+        color: var(--muted);
+        letter-spacing: .02em;
+        text-transform: uppercase;
+      }
+      code,pre{
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        color: var(--code);
+      }
+      pre{
+        margin: 0;
+        background: rgba(127, 127, 127, .08);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        overflow: auto;
+      }
+      ul{margin: 0; padding-left: 18px}
+      li{margin: 6px 0}
+      .pill{
+        display: inline-block;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Notion Workspace Synth</h1>
+          <p class="muted">
+            Local-first synthetic Notion-like workspace API for demos, tests, and integrations.
+          </p>
+        </div>
+        <span class="pill">Unauthenticated · SQLite</span>
+      </header>
+
+      <section class="grid" aria-label="Quick links">
+        <div class="card">
+          <h2>Explore</h2>
+          <ul>
+            <li><a href="/docs">OpenAPI UI</a></li>
+            <li><a href="/openapi.json">OpenAPI JSON</a></li>
+            <li><a href="/health">Health</a></li>
+            <li><a href="/stats">Stats</a></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Try it</h2>
+          <pre><code>curl http://localhost:8000/pages
+curl http://localhost:8000/pages?include_total=true
+curl "http://localhost:8000/pages?title_contains=Welcome"
+curl http://localhost:8000/databases?include_total=true</code></pre>
+        </div>
+      </section>
+
+      <section class="grid" aria-label="Notes">
+        <div class="card">
+          <h2>Defaults</h2>
+          <ul>
+            <li>Demo org seeds on first run</li>
+            <li>Pagination via <code>limit</code> + <code>offset</code></li>
+            <li>Totals via <code>X-Total-Count</code> header</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>DB Path</h2>
+          <p class="muted">
+            Configured by <code>NOTION_SYNTH_DB</code> (defaults to <code>./notion_synth.db</code>).
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+"""
+
+
+@router.get("/", response_class=HTMLResponse, tags=["meta"])
+def homepage() -> HTMLResponse:
+    return HTMLResponse(content=_homepage_html(), status_code=200)
 
 
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/stats", response_model=Stats, tags=["meta"])
+def stats(request: Request) -> Stats:
+    db = _get_db(request)
+    workspaces = db.query_one("SELECT COUNT(*) AS count FROM workspaces")
+    users = db.query_one("SELECT COUNT(*) AS count FROM users")
+    pages = db.query_one("SELECT COUNT(*) AS count FROM pages")
+    databases = db.query_one("SELECT COUNT(*) AS count FROM databases")
+    database_rows = db.query_one("SELECT COUNT(*) AS count FROM database_rows")
+    comments = db.query_one("SELECT COUNT(*) AS count FROM comments")
+
+    return Stats(
+        db_path=db.path,
+        workspaces=int(workspaces["count"]) if workspaces else 0,
+        users=int(users["count"]) if users else 0,
+        pages=int(pages["count"]) if pages else 0,
+        databases=int(databases["count"]) if databases else 0,
+        database_rows=int(database_rows["count"]) if database_rows else 0,
+        comments=int(comments["count"]) if comments else 0,
+    )
 
 
 @router.get("/workspaces", response_model=list[Workspace])
@@ -66,42 +248,76 @@ def get_workspace(workspace_id: str, request: Request) -> Workspace:
 @router.get("/users", response_model=list[User])
 def list_users(
     request: Request,
+    response: Response,
     workspace_id: str | None = None,
+    name_contains: str | None = None,
     limit: int = Query(50),
     offset: int = Query(0),
+    include_total: bool = Query(False),
 ) -> list[User]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
+
+    conditions: list[str] = []
+    params: list[Any] = []
     if workspace_id:
-        rows = db.query_all(
-            "SELECT * FROM users WHERE workspace_id = ? ORDER BY created_at LIMIT ? OFFSET ?",
-            [workspace_id, limit, offset],
-        )
-    else:
-        rows = db.query_all(
-            "SELECT * FROM users ORDER BY created_at LIMIT ? OFFSET ?", [limit, offset]
-        )
+        conditions.append("workspace_id = ?")
+        params.append(workspace_id)
+    if name_contains:
+        conditions.append("name LIKE ?")
+        params.append(f"%{name_contains}%")
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    if include_total:
+        count_row = db.query_one(f"SELECT COUNT(*) AS count FROM users {where}", params)  # nosec B608
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+    rows = db.query_all(
+        f"SELECT * FROM users {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
+        [*params, limit, offset],
+    )
     return [User(**dict(row)) for row in rows]
 
 
 @router.get("/pages", response_model=list[Page])
 def list_pages(
     request: Request,
+    response: Response,
     workspace_id: str | None = None,
+    parent_type: str | None = None,
+    parent_id: str | None = None,
+    title_contains: str | None = None,
     limit: int = Query(50),
     offset: int = Query(0),
+    include_total: bool = Query(False),
 ) -> list[Page]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
+
+    conditions: list[str] = []
+    params: list[Any] = []
     if workspace_id:
-        rows = db.query_all(
-            "SELECT * FROM pages WHERE workspace_id = ? ORDER BY created_at LIMIT ? OFFSET ?",
-            [workspace_id, limit, offset],
-        )
-    else:
-        rows = db.query_all(
-            "SELECT * FROM pages ORDER BY created_at LIMIT ? OFFSET ?", [limit, offset]
-        )
+        conditions.append("workspace_id = ?")
+        params.append(workspace_id)
+    if parent_type:
+        conditions.append("parent_type = ?")
+        params.append(parent_type)
+    if parent_id:
+        conditions.append("parent_id = ?")
+        params.append(parent_id)
+    if title_contains:
+        conditions.append("title LIKE ?")
+        params.append(f"%{title_contains}%")
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    if include_total:
+        count_row = db.query_one(f"SELECT COUNT(*) AS count FROM pages {where}", params)  # nosec B608
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+    rows = db.query_all(
+        f"SELECT * FROM pages {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
+        [*params, limit, offset],
+    )
     return [
         Page(**{**dict(row), "content": _parse_json(row["content"])})
         for row in rows
@@ -186,22 +402,37 @@ def update_page(page_id: str, payload: PageUpdate, request: Request) -> Page:
 @router.get("/databases", response_model=list[DatabaseModel])
 def list_databases(
     request: Request,
+    response: Response,
     workspace_id: str | None = None,
+    name_contains: str | None = None,
     limit: int = Query(50),
     offset: int = Query(0),
+    include_total: bool = Query(False),
 ) -> list[DatabaseModel]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
+
+    conditions: list[str] = []
+    params: list[Any] = []
     if workspace_id:
-        rows = db.query_all(
-            "SELECT * FROM databases WHERE workspace_id = ? ORDER BY created_at LIMIT ? OFFSET ?",
-            [workspace_id, limit, offset],
+        conditions.append("workspace_id = ?")
+        params.append(workspace_id)
+    if name_contains:
+        conditions.append("name LIKE ?")
+        params.append(f"%{name_contains}%")
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    if include_total:
+        count_row = db.query_one(  # nosec B608
+            f"SELECT COUNT(*) AS count FROM databases {where}",  # nosec B608
+            params,
         )
-    else:
-        rows = db.query_all(
-            "SELECT * FROM databases ORDER BY created_at LIMIT ? OFFSET ?",
-            [limit, offset],
-        )
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+    rows = db.query_all(
+        f"SELECT * FROM databases {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
+        [*params, limit, offset],
+    )
     return [
         DatabaseModel(**{**dict(row), "schema": _parse_json(row["schema_json"])})
         for row in rows
@@ -245,11 +476,19 @@ def create_database(payload: DatabaseCreate, request: Request) -> DatabaseModel:
 def list_database_rows(
     database_id: str,
     request: Request,
+    response: Response,
     limit: int = Query(50),
     offset: int = Query(0),
+    include_total: bool = Query(False),
 ) -> list[DatabaseRow]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
+    if include_total:
+        count_row = db.query_one(
+            "SELECT COUNT(*) AS count FROM database_rows WHERE database_id = ?",
+            [database_id],
+        )
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
     rows = db.query_all(
         """
         SELECT * FROM database_rows WHERE database_id = ? ORDER BY created_at LIMIT ? OFFSET ?
@@ -288,22 +527,34 @@ def create_database_row(
 @router.get("/comments", response_model=list[Comment])
 def list_comments(
     request: Request,
+    response: Response,
     page_id: str | None = None,
+    author_id: str | None = None,
     limit: int = Query(50),
     offset: int = Query(0),
+    include_total: bool = Query(False),
 ) -> list[Comment]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
+
+    conditions: list[str] = []
+    params: list[Any] = []
     if page_id:
-        rows = db.query_all(
-            "SELECT * FROM comments WHERE page_id = ? ORDER BY created_at LIMIT ? OFFSET ?",
-            [page_id, limit, offset],
-        )
-    else:
-        rows = db.query_all(
-            "SELECT * FROM comments ORDER BY created_at LIMIT ? OFFSET ?",
-            [limit, offset],
-        )
+        conditions.append("page_id = ?")
+        params.append(page_id)
+    if author_id:
+        conditions.append("author_id = ?")
+        params.append(author_id)
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    if include_total:
+        count_row = db.query_one(f"SELECT COUNT(*) AS count FROM comments {where}", params)  # nosec B608
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+    rows = db.query_all(
+        f"SELECT * FROM comments {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
+        [*params, limit, offset],
+    )
     return [Comment(**dict(row)) for row in rows]
 
 
