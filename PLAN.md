@@ -27,8 +27,9 @@ More details: `docs/PROJECT.md`
 - Added homepage at `/` and dataset counts at `/stats`.
 - Added filtering + optional `X-Total-Count` header to list endpoints.
 - Expanded API tests for the new behavior.
+- Added fixture export/import endpoints for deterministic demo bundles.
+- Added `mode=merge` fixture import for upsert-style iterative demos.
 
 ## Ship next (tight scope)
 - Add parent filtering for databases/rows where relevant (and document conventions).
-- Add fixture export/import endpoints for deterministic demo bundles.
 - Add request/response examples to docs for common flows (create page, create db, insert row).

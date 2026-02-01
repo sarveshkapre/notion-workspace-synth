@@ -94,3 +94,19 @@ class CommentCreate(BaseModel):
     page_id: str
     author_id: str
     body: str
+
+
+class Fixture(BaseModel):
+    format_version: int = 1
+    exported_at: str
+    workspaces: list[Workspace]
+    users: list[User]
+    pages: list[Page]
+    databases: list[Database]
+    database_rows: list[DatabaseRow]
+    comments: list[Comment]
+
+
+class FixtureImportResult(BaseModel):
+    status: str
+    inserted: dict[str, int]

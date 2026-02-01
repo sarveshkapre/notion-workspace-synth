@@ -30,6 +30,13 @@ Totals via response header:
 curl -i "http://localhost:8000/pages?include_total=true"
 ```
 
+Fixtures (export/import):
+```bash
+curl http://localhost:8000/fixtures/export > fixture.json
+curl -X POST "http://localhost:8000/fixtures/import?mode=replace" -H "content-type: application/json" --data-binary @fixture.json
+curl -X POST "http://localhost:8000/fixtures/import?mode=merge" -H "content-type: application/json" --data-binary @fixture.json
+```
+
 ## Configuration
 - `NOTION_SYNTH_DB` (optional): path to SQLite DB file. Default: `./notion_synth.db`
 

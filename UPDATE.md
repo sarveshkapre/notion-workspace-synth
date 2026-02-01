@@ -5,6 +5,8 @@
 - Added `GET /stats` for dataset counts and DB path.
 - Added filtering on list endpoints plus optional `X-Total-Count` via `include_total=true`.
 - Added tests covering the new endpoints and `X-Total-Count` behavior.
+- Added fixture export/import endpoints (`/fixtures/export`, `/fixtures/import`).
+- Added `mode=merge` for fixture import (upsert without deleting existing data).
 
 ## How to run
 ```bash
@@ -21,5 +23,5 @@ Then open:
 make check
 ```
 
-## PR
-PR: `https://github.com/sarveshkapre/notion-workspace-synth/pull/1`
+## Delivery
+- Work is pushed directly to `main` (no PR).

@@ -43,6 +43,7 @@ def connect(db_path: str | None = None) -> Database:
     path = db_path or os.getenv("NOTION_SYNTH_DB") or DEFAULT_DB_PATH
     use_uri = path.startswith("file:")
     connection = sqlite3.connect(path, check_same_thread=False, uri=use_uri)
+    connection.execute("PRAGMA foreign_keys=ON")
     connection.row_factory = sqlite3.Row
     db = Database(path=path, connection=connection)
     _init_schema(db)

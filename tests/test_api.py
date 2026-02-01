@@ -72,3 +72,57 @@ def test_list_pages_filters_and_total_header() -> None:
     pages = response.json()
     assert len(pages) == 1
     assert pages[0]["id"] == "page_home"
+
+
+def test_fixtures_export_import_roundtrip() -> None:
+    client_a = TestClient(create_app(":memory:"))
+    exported = client_a.get("/fixtures/export")
+    assert exported.status_code == 200
+    fixture = exported.json()
+    assert fixture["format_version"] == 1
+    assert len(fixture["pages"]) >= 1
+
+    client_b = TestClient(create_app(":memory:"))
+    extra = client_b.post(
+        "/pages",
+        json={
+            "workspace_id": "ws_demo",
+            "title": "Extra Page",
+            "content": {"blocks": ["Extra"]},
+            "parent_type": "workspace",
+            "parent_id": "ws_demo",
+        },
+    )
+    assert extra.status_code == 201
+
+    imported = client_b.post("/fixtures/import?mode=replace", json=fixture)
+    assert imported.status_code == 200
+    body = imported.json()
+    assert body["status"] == "ok"
+    assert body["inserted"]["workspaces"] == 1
+
+    stats = client_b.get("/stats").json()
+    assert stats["workspaces"] == body["inserted"]["workspaces"]
+    assert stats["pages"] == body["inserted"]["pages"]
+    assert stats["databases"] == body["inserted"]["databases"]
+
+    # Merge should not delete existing objects.
+    client_c = TestClient(create_app(":memory:"))
+    extra_c = client_c.post(
+        "/pages",
+        json={
+            "workspace_id": "ws_demo",
+            "title": "Extra Page",
+            "content": {"blocks": ["Extra"]},
+            "parent_type": "workspace",
+            "parent_id": "ws_demo",
+        },
+    )
+    assert extra_c.status_code == 201
+
+    merged = client_c.post("/fixtures/import?mode=merge", json=fixture)
+    assert merged.status_code == 200
+    merged_stats = client_c.get("/stats").json()
+    assert merged_stats["pages"] == body["inserted"]["pages"] + 1
+    extra_pages = client_c.get("/pages?title_contains=Extra%20Page").json()
+    assert len(extra_pages) == 1
