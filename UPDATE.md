@@ -22,14 +22,4 @@ make check
 ```
 
 ## PR
-If `gh` is authenticated:
-```bash
-git push -u origin HEAD
-gh pr create --fill
-```
-
-Otherwise:
-```bash
-git push -u origin HEAD
-```
-Then open a PR from the pushed branch in GitHub UI.
+PR: `https://github.com/sarveshkapre/notion-workspace-synth/pull/1`
