@@ -96,6 +96,16 @@ class CommentCreate(BaseModel):
     body: str
 
 
+class WorkspaceCreate(BaseModel):
+    name: str
+
+
+class UserCreate(BaseModel):
+    workspace_id: str
+    name: str
+    email: str
+
+
 class Fixture(BaseModel):
     format_version: int = 1
     exported_at: str

@@ -7,6 +7,7 @@
 - Added tests covering the new endpoints and `X-Total-Count` behavior.
 - Added fixture export/import endpoints (`/fixtures/export`, `/fixtures/import`).
 - Added `mode=merge` for fixture import (upsert without deleting existing data).
+- Added `POST /workspaces`, `POST /users`, and `GET /users/{user_id}` to create and fetch users.
 
 ## How to run
 ```bash

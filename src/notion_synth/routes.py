@@ -19,7 +19,9 @@ from notion_synth.models import (
     PageUpdate,
     Stats,
     User,
+    UserCreate,
     Workspace,
+    WorkspaceCreate,
 )
 from notion_synth.models import (
     Database as DatabaseModel,
@@ -167,6 +169,8 @@ def _homepage_html() -> str:
             <li><a href="/openapi.json">OpenAPI JSON</a></li>
             <li><a href="/health">Health</a></li>
             <li><a href="/stats">Stats</a></li>
+            <li><a href="/workspaces">Workspaces</a></li>
+            <li><a href="/users">Users</a></li>
           </ul>
         </div>
         <div class="card">
@@ -476,6 +480,18 @@ def list_workspaces(request: Request) -> list[Workspace]:
     return [Workspace(**dict(row)) for row in rows]
 
 
+@router.post("/workspaces", response_model=Workspace, status_code=201)
+def create_workspace(payload: WorkspaceCreate, request: Request) -> Workspace:
+    db = _get_db(request)
+    now = _utc_now()
+    workspace_id = new_id("ws")
+    db.execute(
+        "INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)",
+        [workspace_id, payload.name, now],
+    )
+    return Workspace(id=workspace_id, name=payload.name, created_at=now)
+
+
 @router.get("/workspaces/{workspace_id}", response_model=Workspace)
 def get_workspace(workspace_id: str, request: Request) -> Workspace:
     db = _get_db(request)
@@ -491,6 +507,7 @@ def list_users(
     response: Response,
     workspace_id: str | None = None,
     name_contains: str | None = None,
+    email_contains: str | None = None,
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
@@ -506,6 +523,9 @@ def list_users(
     if name_contains:
         conditions.append("name LIKE ?")
         params.append(f"%{name_contains}%")
+    if email_contains:
+        conditions.append("email LIKE ?")
+        params.append(f"%{email_contains}%")
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     if include_total:
@@ -517,6 +537,37 @@ def list_users(
         [*params, limit, offset],
     )
     return [User(**dict(row)) for row in rows]
+
+
+@router.get("/users/{user_id}", response_model=User)
+def get_user(user_id: str, request: Request) -> User:
+    db = _get_db(request)
+    row = db.query_one("SELECT * FROM users WHERE id = ?", [user_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return User(**dict(row))
+
+
+@router.post("/users", response_model=User, status_code=201)
+def create_user(payload: UserCreate, request: Request) -> User:
+    db = _get_db(request)
+    workspace = db.query_one("SELECT id FROM workspaces WHERE id = ?", [payload.workspace_id])
+    if workspace is None:
+        raise HTTPException(status_code=400, detail="Invalid workspace_id")
+
+    now = _utc_now()
+    user_id = new_id("user")
+    db.execute(
+        "INSERT INTO users (id, workspace_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)",
+        [user_id, payload.workspace_id, payload.name, payload.email, now],
+    )
+    return User(
+        id=user_id,
+        workspace_id=payload.workspace_id,
+        name=payload.name,
+        email=payload.email,
+        created_at=now,
+    )
 
 
 @router.get("/pages", response_model=list[Page])

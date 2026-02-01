@@ -29,7 +29,9 @@ More details: `docs/PROJECT.md`
 - Expanded API tests for the new behavior.
 - Added fixture export/import endpoints for deterministic demo bundles.
 - Added `mode=merge` fixture import for upsert-style iterative demos.
+- Added `POST /workspaces` and `POST /users` to create data beyond the seed.
 
 ## Ship next (tight scope)
 - Add parent filtering for databases/rows where relevant (and document conventions).
 - Add request/response examples to docs for common flows (create page, create db, insert row).
+- Add update/delete endpoints for pages/databases/rows as needed for fuller flows.

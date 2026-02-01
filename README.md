@@ -25,6 +25,12 @@ API docs:
 curl http://localhost:8000/pages
 ```
 
+Create a workspace and a user:
+```bash
+curl -X POST http://localhost:8000/workspaces -H "content-type: application/json" -d '{"name":"Acme"}'
+curl -X POST http://localhost:8000/users -H "content-type: application/json" -d '{"workspace_id":"ws_...","name":"Taylor","email":"taylor@example.com"}'
+```
+
 Totals via response header:
 ```bash
 curl -i "http://localhost:8000/pages?include_total=true"

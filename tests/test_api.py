@@ -24,6 +24,39 @@ def test_seeded_pages() -> None:
     assert pages[0]["id"]
 
 
+def test_create_workspace_and_user() -> None:
+    client = _client()
+
+    created_ws = client.post("/workspaces", json={"name": "Acme"})
+    assert created_ws.status_code == 201
+    ws = created_ws.json()
+    assert ws["id"].startswith("ws_")
+    assert ws["name"] == "Acme"
+
+    created_user = client.post(
+        "/users",
+        json={"workspace_id": ws["id"], "name": "Taylor", "email": "taylor@example.com"},
+    )
+    assert created_user.status_code == 201
+    user = created_user.json()
+    assert user["id"].startswith("user_")
+    assert user["workspace_id"] == ws["id"]
+    assert user["email"] == "taylor@example.com"
+
+    fetched = client.get(f"/users/{user['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == user["id"]
+
+
+def test_create_user_rejects_invalid_workspace() -> None:
+    client = _client()
+    created_user = client.post(
+        "/users",
+        json={"workspace_id": "ws_does_not_exist", "name": "Taylor", "email": "t@example.com"},
+    )
+    assert created_user.status_code == 400
+
+
 def test_create_page() -> None:
     client = _client()
     payload = {
