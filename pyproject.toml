@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "notion-workspace-synth"
-version = "0.1.0"
+version = "0.2.0"
 description = "Synthetic Notion-like workspace API with demo org seeding."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,9 @@ dependencies = [
   "uvicorn[standard]>=0.30.0",
   "pydantic>=2.7.0",
 ]
+
+[project.scripts]
+notion-synth = "notion_synth.cli:main"
 
 [project.optional-dependencies]
 dev = [
