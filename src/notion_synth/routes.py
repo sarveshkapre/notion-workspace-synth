@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 
 from notion_synth.db import Database, new_id
+from notion_synth.fixtures import export_fixture as export_fixture_payload
+from notion_synth.fixtures import import_fixture as import_fixture_payload
 from notion_synth.models import (
     Comment,
     CommentCreate,
@@ -25,9 +27,7 @@ from notion_synth.models import (
     Workspace,
     WorkspaceCreate,
 )
-from notion_synth.models import (
-    Database as DatabaseModel,
-)
+from notion_synth.models import Database as DatabaseModel
 
 router = APIRouter()
 
@@ -240,30 +240,7 @@ def stats(request: Request) -> Stats:
 @router.get("/fixtures/export", response_model=Fixture, tags=["fixtures"])
 def export_fixture(request: Request) -> Fixture:
     db = _get_db(request)
-    rows_workspaces = db.query_all("SELECT * FROM workspaces ORDER BY created_at")
-    rows_users = db.query_all("SELECT * FROM users ORDER BY created_at")
-    rows_pages = db.query_all("SELECT * FROM pages ORDER BY created_at")
-    rows_databases = db.query_all("SELECT * FROM databases ORDER BY created_at")
-    rows_database_rows = db.query_all("SELECT * FROM database_rows ORDER BY created_at")
-    rows_comments = db.query_all("SELECT * FROM comments ORDER BY created_at")
-
-    return Fixture(
-        exported_at=_utc_now(),
-        workspaces=[Workspace(**dict(row)) for row in rows_workspaces],
-        users=[User(**dict(row)) for row in rows_users],
-        pages=[
-            Page(**{**dict(row), "content": _parse_json(row["content"])}) for row in rows_pages
-        ],
-        databases=[
-            DatabaseModel(**{**dict(row), "schema": _parse_json(row["schema_json"])})
-            for row in rows_databases
-        ],
-        database_rows=[
-            DatabaseRow(**{**dict(row), "properties": _parse_json(row["properties_json"])})
-            for row in rows_database_rows
-        ],
-        comments=[Comment(**dict(row)) for row in rows_comments],
-    )
+    return export_fixture_payload(db)
 
 
 @router.post("/fixtures/import", response_model=FixtureImportResult, tags=["fixtures"])
@@ -275,204 +252,11 @@ def import_fixture(
         description="Import mode: 'replace' (wipe then load) or 'merge' (upsert).",
     ),
 ) -> FixtureImportResult:
-    if payload.format_version != 1:
-        raise HTTPException(status_code=400, detail="Unsupported fixture format_version")
-    if mode not in {"replace", "merge"}:
-        raise HTTPException(status_code=400, detail="Unsupported import mode")
-
     db = _get_db(request)
-    conn = db.connection
-    cursor = conn.cursor()
-
-    inserted: dict[str, int] = {}
     try:
-        conn.execute("BEGIN")
-
-        if mode == "replace":
-            cursor.execute("DELETE FROM comments")
-            cursor.execute("DELETE FROM database_rows")
-            cursor.execute("DELETE FROM pages")
-            cursor.execute("DELETE FROM databases")
-            cursor.execute("DELETE FROM users")
-            cursor.execute("DELETE FROM workspaces")
-
-        workspaces_query = (
-            "INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)"
-            if mode == "replace"
-            else """
-            INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                name = excluded.name,
-                created_at = excluded.created_at
-            """
-        )
-        cursor.executemany(
-            workspaces_query,
-            [(w.id, w.name, w.created_at) for w in payload.workspaces],
-        )
-        inserted["workspaces"] = len(payload.workspaces)
-
-        users_query = (
-            "INSERT INTO users (id, workspace_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)"
-            if mode == "replace"
-            else """
-            INSERT INTO users (id, workspace_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                workspace_id = excluded.workspace_id,
-                name = excluded.name,
-                email = excluded.email,
-                created_at = excluded.created_at
-            """
-        )
-        cursor.executemany(
-            users_query,
-            [(u.id, u.workspace_id, u.name, u.email, u.created_at) for u in payload.users],
-        )
-        inserted["users"] = len(payload.users)
-
-        pages_query = (
-            """
-            INSERT INTO pages (
-                id,
-                workspace_id,
-                title,
-                content,
-                parent_type,
-                parent_id,
-                created_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """
-            if mode == "replace"
-            else """
-            INSERT INTO pages (
-                id,
-                workspace_id,
-                title,
-                content,
-                parent_type,
-                parent_id,
-                created_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                workspace_id = excluded.workspace_id,
-                title = excluded.title,
-                content = excluded.content,
-                parent_type = excluded.parent_type,
-                parent_id = excluded.parent_id,
-                created_at = excluded.created_at,
-                updated_at = excluded.updated_at
-            """
-        )
-        cursor.executemany(
-            pages_query,
-            [
-                (
-                    p.id,
-                    p.workspace_id,
-                    p.title,
-                    json.dumps(p.content),
-                    p.parent_type,
-                    p.parent_id,
-                    p.created_at,
-                    p.updated_at,
-                )
-                for p in payload.pages
-            ],
-        )
-        inserted["pages"] = len(payload.pages)
-
-        databases_query = (
-            """
-            INSERT INTO databases (id, workspace_id, name, schema_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """
-            if mode == "replace"
-            else """
-            INSERT INTO databases (id, workspace_id, name, schema_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                workspace_id = excluded.workspace_id,
-                name = excluded.name,
-                schema_json = excluded.schema_json,
-                created_at = excluded.created_at,
-                updated_at = excluded.updated_at
-            """
-        )
-        cursor.executemany(
-            databases_query,
-            [
-                (
-                    d.id,
-                    d.workspace_id,
-                    d.name,
-                    json.dumps(d.schema_),
-                    d.created_at,
-                    d.updated_at,
-                )
-                for d in payload.databases
-            ],
-        )
-        inserted["databases"] = len(payload.databases)
-
-        database_rows_query = (
-            """
-            INSERT INTO database_rows (id, database_id, properties_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            """
-            if mode == "replace"
-            else """
-            INSERT INTO database_rows (id, database_id, properties_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                database_id = excluded.database_id,
-                properties_json = excluded.properties_json,
-                created_at = excluded.created_at,
-                updated_at = excluded.updated_at
-            """
-        )
-        cursor.executemany(
-            database_rows_query,
-            [
-                (
-                    r.id,
-                    r.database_id,
-                    json.dumps(r.properties),
-                    r.created_at,
-                    r.updated_at,
-                )
-                for r in payload.database_rows
-            ],
-        )
-        inserted["database_rows"] = len(payload.database_rows)
-
-        comments_query = (
-            "INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)"
-            if mode == "replace"
-            else """
-            INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                page_id = excluded.page_id,
-                author_id = excluded.author_id,
-                body = excluded.body,
-                created_at = excluded.created_at
-            """
-        )
-        cursor.executemany(
-            comments_query,
-            [(c.id, c.page_id, c.author_id, c.body, c.created_at) for c in payload.comments],
-        )
-        inserted["comments"] = len(payload.comments)
-
-        conn.commit()
-    except Exception as exc:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail="Fixture import failed") from exc
-
-    return FixtureImportResult(status="ok", inserted=inserted)
+        return import_fixture_payload(db, payload, mode=mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/workspaces", response_model=list[Workspace])

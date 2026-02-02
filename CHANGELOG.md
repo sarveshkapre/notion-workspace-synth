@@ -8,6 +8,8 @@
 - Add `mode=merge` for fixture import (upsert without deleting existing data).
 - Add `POST /workspaces`, `POST /users`, and `GET /users/{user_id}` to create and retrieve user data.
 - Add page/database/row delete/update endpoints (and validate foreign keys on create to avoid 500s).
+- Add enterprise CLI for generating, seeding, exporting, and importing synthetic workspaces.
+- Add deterministic synthetic generator profile for engineering orgs.
 
 ## [0.1.0] - 2026-02-01
 - Initial API with seeded demo workspace.
