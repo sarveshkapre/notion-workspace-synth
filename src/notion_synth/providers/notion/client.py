@@ -76,6 +76,9 @@ class NotionClient:
     def archive_page(self, page_id: str) -> dict[str, Any]:
         return self.request("PATCH", f"/pages/{page_id}", json={"archived": True})
 
+    def get_page(self, page_id: str) -> dict[str, Any]:
+        return self.request("GET", f"/pages/{page_id}")
+
 
 def _retry_delay(response: httpx.Response, retries: int) -> float:
     retry_after = response.headers.get("retry-after")

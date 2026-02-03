@@ -63,13 +63,11 @@ def enrich_blueprint(
 
 
 def _call_openai(base_url: str, api_key: str, model: str, prompt: str) -> dict[str, Any]:
-    response = httpx.post(
-        f"{base_url}/responses",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": model,
-            "input": prompt,
-            "response_format": {
+    payload = {
+        "model": model,
+        "input": prompt,
+        "text": {
+            "format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "notion_enrichment",
@@ -79,22 +77,63 @@ def _call_openai(base_url: str, api_key: str, model: str, prompt: str) -> dict[s
                         "required": ["append_blocks"],
                         "additionalProperties": False,
                     },
+                    "strict": True,
                 },
-            },
+            }
         },
+    }
+    response = httpx.post(
+        f"{base_url}/responses",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
         timeout=60,
     )
+    if response.status_code == 400:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = {}
+        if "json_schema" in str(detail) or "response_format" in str(detail) or "format" in str(detail):
+            payload["text"]["format"] = {"type": "json_object"}
+            response = httpx.post(
+                f"{base_url}/responses",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
     response.raise_for_status()
     return response.json()
 
 
 def _extract_blocks(payload: dict[str, Any]) -> list[str]:
-    try:
-        output = payload["output"][0]["content"][0]["json"]["append_blocks"]
-        if isinstance(output, list):
-            return [str(item) for item in output][:4]
-    except Exception:
-        return []
+    if "output_text" in payload:
+        text = payload.get("output_text")
+        if isinstance(text, str):
+            try:
+                parsed = json.loads(text)
+                blocks = parsed.get("append_blocks", [])
+                if isinstance(blocks, list):
+                    return [str(item) for item in blocks][:4]
+            except Exception:
+                return []
+    for item in payload.get("output", []):
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content", []):
+            if content.get("type") == "output_text":
+                text = content.get("text", "")
+                try:
+                    parsed = json.loads(text)
+                    blocks = parsed.get("append_blocks", [])
+                    if isinstance(blocks, list):
+                        return [str(item) for item in blocks][:4]
+                except Exception:
+                    continue
+            if content.get("type") == "output_json":
+                parsed = content.get("json", {})
+                blocks = parsed.get("append_blocks", [])
+                if isinstance(blocks, list):
+                    return [str(item) for item in blocks][:4]
     return []
 
 

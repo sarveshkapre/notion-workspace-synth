@@ -12,6 +12,12 @@ notion-synth notion verify-users --roster roster.csv --token "$NOTION_TOKEN" \
 ```
 Use `--require-all` to return a non-zero exit code if any users are missing.
 
+## Validate root access
+```bash
+notion-synth notion validate-root --root-page-id "$ROOT_PAGE_ID" --token "$NOTION_TOKEN" \
+  --report notion_root_report.json
+```
+
 ## Apply a blueprint
 ```bash
 notion-synth notion apply blueprint.enriched.json \

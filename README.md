@@ -64,7 +64,14 @@ Provision Entra users + groups:
 ```bash
 notion-synth entra apply --roster roster.csv --mode create \
   --tenant-id "$ENTRA_TENANT_ID" --client-id "$ENTRA_CLIENT_ID" --client-secret "$ENTRA_CLIENT_SECRET" \
-  --company "Acme Robotics"
+  --company "Acme Robotics" --state state.db
+```
+
+Verify provisioning (Entra -> Notion):
+```bash
+notion-synth entra verify-provisioning --roster roster.csv \
+  --tenant-id "$ENTRA_TENANT_ID" --client-id "$ENTRA_CLIENT_ID" --client-secret "$ENTRA_CLIENT_SECRET" \
+  --token "$NOTION_TOKEN" --company "Acme Robotics" --state state.db --wait-minutes 30
 ```
 
 Generate a blueprint:
@@ -81,6 +88,11 @@ notion-synth llm enrich blueprint.json --output blueprint.enriched.json --cache-
 Apply to Notion:
 ```bash
 notion-synth notion apply blueprint.enriched.json --root-page-id "$ROOT_PAGE_ID" --token "$NOTION_TOKEN"
+```
+
+Validate root access:
+```bash
+notion-synth notion validate-root --root-page-id "$ROOT_PAGE_ID" --token "$NOTION_TOKEN"
 ```
 
 Run live activity:

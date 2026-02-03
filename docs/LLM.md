@@ -1,7 +1,7 @@
 # LLM enrichment
 
 LLM enrichment is optional. It generates richer synthetic text and writes it back into the blueprint,
-so subsequent applies are deterministic.
+so subsequent applies are deterministic. The CLI uses the Responses API with `text.format` for structured JSON.
 
 ## Usage
 ```bash

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from notion_synth.audit import AuditLog
@@ -15,6 +16,7 @@ from notion_synth.llm.enrich import enrich_blueprint
 from notion_synth.models import Fixture
 from notion_synth.providers.entra.apply import apply_entra
 from notion_synth.providers.entra.graph import GraphClient
+from notion_synth.providers.entra.verify import verify_provisioning
 from notion_synth.providers.notion.apply import (
     apply_blueprint,
     destroy_blueprint,
@@ -114,6 +116,20 @@ def main(argv: list[str] | None = None) -> int:
     entra_apply.add_argument("--client-secret", required=True)
     entra_apply.add_argument("--company", required=True)
     entra_apply.add_argument("--report", default="entra_apply_report.json")
+    entra_apply.add_argument("--state", default=None)
+
+    entra_verify = entra_sub.add_parser("verify-provisioning", help="Verify Entra -> Notion SCIM.")
+    entra_verify.add_argument("--roster", required=True)
+    entra_verify.add_argument("--tenant-id", required=True)
+    entra_verify.add_argument("--client-id", required=True)
+    entra_verify.add_argument("--client-secret", required=True)
+    entra_verify.add_argument("--token", required=True)
+    entra_verify.add_argument("--company", required=True)
+    entra_verify.add_argument("--report", default="entra_verify_report.json")
+    entra_verify.add_argument("--state", default=None)
+    entra_verify.add_argument("--require-all", action="store_true")
+    entra_verify.add_argument("--wait-minutes", type=int, default=0)
+    entra_verify.add_argument("--interval-seconds", type=int, default=60)
 
     blueprint_parser = subparsers.add_parser("blueprint", help="Blueprint utilities.")
     blueprint_sub = blueprint_parser.add_subparsers(dest="blueprint_command", required=True)
@@ -133,6 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     notion_verify.add_argument("--token", required=True)
     notion_verify.add_argument("--report", default="notion_verify_report.json")
     notion_verify.add_argument("--require-all", action="store_true")
+
+    notion_validate = notion_sub.add_parser("validate-root", help="Validate root page access.")
+    notion_validate.add_argument("--root-page-id", required=True)
+    notion_validate.add_argument("--token", required=True)
+    notion_validate.add_argument("--report", default="notion_root_report.json")
 
     notion_apply = notion_sub.add_parser("apply", help="Apply a blueprint to Notion.")
     notion_apply.add_argument("blueprint")
@@ -231,6 +252,50 @@ def main(argv: list[str] | None = None) -> int:
             record_run_finish(store, run_id, "error")
             raise
 
+    if args.command == "entra" and args.entra_command == "verify-provisioning":
+        roster = load_roster(args.roster)
+        graph = GraphClient(
+            tenant_id=args.tenant_id,
+            client_id=args.client_id,
+            client_secret=args.client_secret,
+        )
+        notion = NotionClient(token=args.token)
+        store = connect_state(args.state)
+        run_id = stable_hash({"command": "entra-verify", "timestamp": utc_now()})
+        record_run_start(store, run_id, "entra-verify", _hash_roster(args.roster))
+        deadline = time.time() + (args.wait_minutes * 60)
+        report = None
+        try:
+            while True:
+                report = verify_provisioning(
+                    graph=graph,
+                    notion=notion,
+                    roster=roster,
+                    company=args.company,
+                    store=store,
+                )
+                if not report.missing_in_notion and not report.missing_in_entra and not report.missing_groups:
+                    break
+                if time.time() >= deadline:
+                    break
+                time.sleep(max(5, args.interval_seconds))
+            payload = {
+                "matched": report.matched if report else 0,
+                "total": report.total if report else 0,
+                "missing_in_entra": report.missing_in_entra if report else [],
+                "missing_in_notion": report.missing_in_notion if report else [],
+                "missing_groups": report.missing_groups if report else [],
+            }
+            _write_json(Path(args.report), payload)
+            record_run_finish(store, run_id, "ok")
+            print(json.dumps(payload, indent=2))
+            if args.require_all and (payload["missing_in_entra"] or payload["missing_in_notion"] or payload["missing_groups"]):
+                return 2
+            return 0
+        except Exception:
+            record_run_finish(store, run_id, "error")
+            raise
+
     if args.command == "blueprint" and args.blueprint_command == "generate":
         roster = load_roster(args.roster)
         blueprint = generate_blueprint(
@@ -256,6 +321,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.require_all and result.missing:
             return 2
         return 0
+
+    if args.command == "notion" and args.notion_command == "validate-root":
+        client = NotionClient(token=args.token)
+        try:
+            page = client.get_page(args.root_page_id)
+            report = {"ok": True, "page_id": page.get("id")}
+        except Exception as exc:
+            report = {"ok": False, "error": str(exc)}
+        _write_json(Path(args.report), report)
+        print(json.dumps(report, indent=2))
+        return 0 if report["ok"] else 2
 
     if args.command == "notion" and args.notion_command == "apply":
         blueprint = _load_blueprint(args.blueprint)
