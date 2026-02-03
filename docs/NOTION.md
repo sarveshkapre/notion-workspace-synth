@@ -7,8 +7,10 @@
 
 ## Verify users (after Entra SCIM provisioning)
 ```bash
-notion-synth notion verify-users --roster roster.csv --token "$NOTION_TOKEN"
+notion-synth notion verify-users --roster roster.csv --token "$NOTION_TOKEN" \
+  --report notion_verify_report.json
 ```
+Use `--require-all` to return a non-zero exit code if any users are missing.
 
 ## Apply a blueprint
 ```bash
@@ -16,7 +18,8 @@ notion-synth notion apply blueprint.enriched.json \
   --root-page-id "$ROOT_PAGE_ID" \
   --token "$NOTION_TOKEN" \
   --state state.db \
-  --audit-dir audit
+  --audit-dir audit \
+  --redact-emails
 ```
 
 ## Cleanup
@@ -31,7 +34,8 @@ notion-synth notion activity blueprint.enriched.json \
   --state state.db \
   --audit-dir audit \
   --tick-minutes 15 \
-  --jitter 0.3
+  --jitter 0.3 \
+  --redact-emails
 ```
 
 ## Notes

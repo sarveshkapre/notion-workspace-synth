@@ -24,9 +24,11 @@ notion-synth entra apply --roster roster.csv \
   --tenant-id "$ENTRA_TENANT_ID" \
   --client-id "$ENTRA_CLIENT_ID" \
   --client-secret "$ENTRA_CLIENT_SECRET" \
-  --company "Acme Robotics"
+  --company "Acme Robotics" \
+  --report entra_apply_report.json
 ```
 
 ## Notes
 - This assumes the Notion SCIM provisioning app is already configured in Entra.
 - Use `--mode sync` to only map existing users/groups (no creation).
+- The apply report is written to `entra_apply_report.json` by default.

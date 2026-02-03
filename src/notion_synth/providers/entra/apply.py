@@ -3,6 +3,8 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 
+import httpx
+
 from notion_synth.blueprint_models import IdentityUser
 from notion_synth.providers.entra.graph import GraphClient
 from notion_synth.state import StateStore, upsert_identity
@@ -98,8 +100,13 @@ def apply_entra(
             if dry_run:
                 result.memberships_added += 1
                 continue
-            client.add_member(group_id, identity["entra_object_id"])
-            result.memberships_added += 1
+            try:
+                client.add_member(group_id, identity["entra_object_id"])
+                result.memberships_added += 1
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code in {400, 409}:
+                    continue
+                raise
 
     return result
 

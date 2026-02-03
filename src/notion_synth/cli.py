@@ -23,7 +23,7 @@ from notion_synth.providers.notion.apply import (
 )
 from notion_synth.providers.notion.client import NotionClient
 from notion_synth.roster import RosterConfig, generate_roster, load_roster
-from notion_synth.state import connect_state
+from notion_synth.state import connect_state, record_run_finish, record_run_start
 from notion_synth.util import stable_hash, utc_now
 
 
@@ -113,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     entra_apply.add_argument("--client-id", required=True)
     entra_apply.add_argument("--client-secret", required=True)
     entra_apply.add_argument("--company", required=True)
+    entra_apply.add_argument("--report", default="entra_apply_report.json")
 
     blueprint_parser = subparsers.add_parser("blueprint", help="Blueprint utilities.")
     blueprint_sub = blueprint_parser.add_subparsers(dest="blueprint_command", required=True)
@@ -130,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
     notion_verify.add_argument("--roster", required=True)
     notion_verify.add_argument("--state", default=None)
     notion_verify.add_argument("--token", required=True)
+    notion_verify.add_argument("--report", default="notion_verify_report.json")
+    notion_verify.add_argument("--require-all", action="store_true")
 
     notion_apply = notion_sub.add_parser("apply", help="Apply a blueprint to Notion.")
     notion_apply.add_argument("blueprint")
@@ -138,11 +141,13 @@ def main(argv: list[str] | None = None) -> int:
     notion_apply.add_argument("--state", default=None)
     notion_apply.add_argument("--audit-dir", default="audit")
     notion_apply.add_argument("--mode", choices=["apply", "plan"], default="apply")
+    notion_apply.add_argument("--redact-emails", action="store_true")
 
     notion_destroy = notion_sub.add_parser("destroy", help="Archive created pages.")
     notion_destroy.add_argument("--token", required=True)
     notion_destroy.add_argument("--state", default=None)
     notion_destroy.add_argument("--audit-dir", default="audit")
+    notion_destroy.add_argument("--redact-emails", action="store_true")
 
     notion_activity = notion_sub.add_parser("activity", help="Run synthetic activity.")
     notion_activity.add_argument("blueprint")
@@ -152,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     notion_activity.add_argument("--tick-minutes", type=int, default=15)
     notion_activity.add_argument("--jitter", type=float, default=0.3)
     notion_activity.add_argument("--iterations", type=int, default=1)
+    notion_activity.add_argument("--redact-emails", action="store_true")
 
     llm_parser = subparsers.add_parser("llm", help="LLM enrichment.")
     llm_sub = llm_parser.add_subparsers(dest="llm_command", required=True)
@@ -206,16 +212,24 @@ def main(argv: list[str] | None = None) -> int:
             client_secret=args.client_secret,
         )
         store = connect_state(args.state)
-        result = apply_entra(
-            client=client,
-            roster=roster,
-            groups=groups,
-            store=store,
-            mode=args.mode,
-            dry_run=args.dry_run,
-        )
-        print(json.dumps(result.__dict__, indent=2))
-        return 0
+        run_id = stable_hash({"command": "entra-apply", "timestamp": utc_now()})
+        record_run_start(store, run_id, "entra-apply", _hash_roster(args.roster))
+        try:
+            result = apply_entra(
+                client=client,
+                roster=roster,
+                groups=groups,
+                store=store,
+                mode=args.mode,
+                dry_run=args.dry_run,
+            )
+            _write_json(Path(args.report), result.__dict__)
+            record_run_finish(store, run_id, "ok")
+            print(json.dumps(result.__dict__, indent=2))
+            return 0
+        except Exception:
+            record_run_finish(store, run_id, "error")
+            raise
 
     if args.command == "blueprint" and args.blueprint_command == "generate":
         roster = load_roster(args.roster)
@@ -235,55 +249,75 @@ def main(argv: list[str] | None = None) -> int:
         roster = load_roster(args.roster)
         store = connect_state(args.state)
         client = NotionClient(token=args.token)
-        matched = verify_users(
-            client, store, [user.model_dump() for user in roster]
-        )
-        print(json.dumps({"matched": matched, "total": len(roster)}, indent=2))
+        result = verify_users(client, store, [user.model_dump() for user in roster])
+        report = {"matched": result.matched, "total": result.total, "missing": result.missing}
+        _write_json(Path(args.report), report)
+        print(json.dumps(report, indent=2))
+        if args.require_all and result.missing:
+            return 2
         return 0
 
     if args.command == "notion" and args.notion_command == "apply":
         blueprint = _load_blueprint(args.blueprint)
         store = connect_state(args.state)
         run_id = stable_hash({"command": "notion-apply", "timestamp": utc_now()})
-        audit = AuditLog.open(args.audit_dir, run_id)
+        record_run_start(store, run_id, "notion-apply", stable_hash(blueprint.model_dump()))
+        audit = AuditLog.open(args.audit_dir, run_id, redact_emails=args.redact_emails)
         client = NotionClient(token=args.token)
-        result = apply_blueprint(
-            blueprint,
-            root_page_id=args.root_page_id,
-            store=store,
-            client=client,
-            audit=audit,
-            mode=args.mode,
-        )
-        print(json.dumps(result.__dict__, indent=2))
-        return 0
+        try:
+            result = apply_blueprint(
+                blueprint,
+                root_page_id=args.root_page_id,
+                store=store,
+                client=client,
+                audit=audit,
+                mode=args.mode,
+            )
+            record_run_finish(store, run_id, "ok")
+            print(json.dumps(result.__dict__, indent=2))
+            return 0
+        except Exception:
+            record_run_finish(store, run_id, "error")
+            raise
 
     if args.command == "notion" and args.notion_command == "destroy":
         store = connect_state(args.state)
         run_id = stable_hash({"command": "notion-destroy", "timestamp": utc_now()})
-        audit = AuditLog.open(args.audit_dir, run_id)
+        record_run_start(store, run_id, "notion-destroy", "n/a")
+        audit = AuditLog.open(args.audit_dir, run_id, redact_emails=args.redact_emails)
         client = NotionClient(token=args.token)
-        archived = destroy_blueprint(store, client, audit)
-        print(json.dumps({"archived": archived}, indent=2))
-        return 0
+        try:
+            archived = destroy_blueprint(store, client, audit)
+            record_run_finish(store, run_id, "ok")
+            print(json.dumps({"archived": archived}, indent=2))
+            return 0
+        except Exception:
+            record_run_finish(store, run_id, "error")
+            raise
 
     if args.command == "notion" and args.notion_command == "activity":
         blueprint = _load_blueprint(args.blueprint)
         store = connect_state(args.state)
         run_id = stable_hash({"command": "notion-activity", "timestamp": utc_now()})
-        audit = AuditLog.open(args.audit_dir, run_id)
+        record_run_start(store, run_id, "notion-activity", stable_hash(blueprint.model_dump()))
+        audit = AuditLog.open(args.audit_dir, run_id, redact_emails=args.redact_emails)
         client = NotionClient(token=args.token)
-        executed = run_activity(
-            blueprint,
-            store=store,
-            client=client,
-            audit=audit,
-            tick_minutes=args.tick_minutes,
-            jitter=args.jitter,
-            iterations=args.iterations,
-        )
-        print(json.dumps({"executed": executed}, indent=2))
-        return 0
+        try:
+            executed = run_activity(
+                blueprint,
+                store=store,
+                client=client,
+                audit=audit,
+                tick_minutes=args.tick_minutes,
+                jitter=args.jitter,
+                iterations=args.iterations,
+            )
+            record_run_finish(store, run_id, "ok")
+            print(json.dumps({"executed": executed}, indent=2))
+            return 0
+        except Exception:
+            record_run_finish(store, run_id, "error")
+            raise
 
     if args.command == "llm" and args.llm_command == "enrich":
         blueprint = _load_blueprint(args.blueprint)
@@ -355,6 +389,14 @@ def _write_blueprint(output_path: str, blueprint: Blueprint) -> None:
 def _load_blueprint(path: str) -> Blueprint:
     raw = Path(path).read_text()
     return Blueprint.model_validate_json(raw)
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.write_text(json.dumps(payload, indent=2))
+
+
+def _hash_roster(path: str) -> str:
+    return stable_hash(Path(path).read_text())
 
 
 if __name__ == "__main__":

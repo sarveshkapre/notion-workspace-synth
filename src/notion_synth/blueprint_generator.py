@@ -449,6 +449,16 @@ def _build_activity_stream(
                 payload={"append": f"Follow-up note {index + 1}."},
             )
         )
+    for index, page in enumerate(pages[20:30]):
+        events.append(
+            ActivityEvent(
+                event_id=f"evt_{stable_uuid(f'{config.company}:comment_add:{index}')}",
+                kind="comment_add",
+                target_synth_id=page.synth_id,
+                scheduled_at=(base + timedelta(minutes=index * 22)).isoformat(),
+                payload={"body": f"Comment check-in {index + 1}."},
+            )
+        )
     for index, row in enumerate(rows[:20]):
         events.append(
             ActivityEvent(

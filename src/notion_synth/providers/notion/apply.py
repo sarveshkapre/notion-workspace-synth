@@ -32,7 +32,14 @@ class ApplyResult:
     skipped: int = 0
 
 
-def verify_users(client: NotionClient, store: StateStore, roster: list[dict[str, str]]) -> int:
+@dataclass
+class VerifyResult:
+    matched: int
+    total: int
+    missing: list[str]
+
+
+def verify_users(client: NotionClient, store: StateStore, roster: list[dict[str, str]]) -> VerifyResult:
     users = client.list_users()
     email_map = {}
     for user in users:
@@ -42,12 +49,17 @@ def verify_users(client: NotionClient, store: StateStore, roster: list[dict[str,
             email_map[email.lower()] = user.get("id")
 
     matched = 0
+    missing: list[str] = []
     for row in roster:
         email = row.get("email", "").lower()
         if email and email in email_map:
             upsert_identity(store, row["synth_user_id"], notion_user_id=email_map[email], email=email)
             matched += 1
-    return matched
+        else:
+            if email:
+                missing.append(email)
+    total = len(roster)
+    return VerifyResult(matched=matched, total=total, missing=missing)
 
 
 def apply_blueprint(
@@ -280,12 +292,20 @@ def apply_blueprint(
 
 
 def destroy_blueprint(store: StateStore, client: NotionClient, audit: AuditLog) -> int:
-    pages = list_objects_by_kind(store, "page")
     archived = 0
-    for page in pages:
-        client.archive_page(page["remote_id"])
-        audit.write({"action": "archived", "kind": "page", "synth_id": page["synth_id"], "remote_id": page["remote_id"]})
-        archived += 1
+    kinds = ("page", "database", "row")
+    seen: set[str] = set()
+    for kind in kinds:
+        for obj in list_objects_by_kind(store, kind):
+            remote_id = obj["remote_id"]
+            if remote_id in seen:
+                continue
+            client.archive_page(remote_id)
+            audit.write(
+                {"action": "archived", "kind": kind, "synth_id": obj["synth_id"], "remote_id": remote_id}
+            )
+            archived += 1
+            seen.add(remote_id)
     return archived
 
 
