@@ -5,10 +5,26 @@ import json
 import sys
 from pathlib import Path
 
+from notion_synth.audit import AuditLog
+from notion_synth.blueprint_generator import BlueprintConfig, generate_blueprint
+from notion_synth.blueprint_models import Blueprint
 from notion_synth.db import connect
 from notion_synth.fixtures import export_fixture, import_fixture
 from notion_synth.generator import PROFILES, SyntheticWorkspaceConfig, generate_fixture
+from notion_synth.llm.enrich import enrich_blueprint
 from notion_synth.models import Fixture
+from notion_synth.providers.entra.apply import apply_entra
+from notion_synth.providers.entra.graph import GraphClient
+from notion_synth.providers.notion.apply import (
+    apply_blueprint,
+    destroy_blueprint,
+    run_activity,
+    verify_users,
+)
+from notion_synth.providers.notion.client import NotionClient
+from notion_synth.roster import RosterConfig, generate_roster, load_roster
+from notion_synth.state import connect_state
+from notion_synth.util import stable_hash, utc_now
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,6 +96,73 @@ def main(argv: list[str] | None = None) -> int:
         help="Import mode: replace wipes existing data, merge upserts.",
     )
 
+    roster_parser = subparsers.add_parser("roster", help="Roster utilities.")
+    roster_sub = roster_parser.add_subparsers(dest="roster_command", required=True)
+    roster_generate = roster_sub.add_parser("generate", help="Generate a roster CSV template.")
+    roster_generate.add_argument("--seed", type=int, default=42)
+    roster_generate.add_argument("--users", type=int, default=50)
+    roster_generate.add_argument("--output", "-o", required=True)
+
+    entra_parser = subparsers.add_parser("entra", help="Entra provisioning.")
+    entra_sub = entra_parser.add_subparsers(dest="entra_command", required=True)
+    entra_apply = entra_sub.add_parser("apply", help="Create or sync Entra users/groups.")
+    entra_apply.add_argument("--roster", required=True)
+    entra_apply.add_argument("--mode", choices=["create", "sync"], default="create")
+    entra_apply.add_argument("--dry-run", action="store_true")
+    entra_apply.add_argument("--tenant-id", required=True)
+    entra_apply.add_argument("--client-id", required=True)
+    entra_apply.add_argument("--client-secret", required=True)
+    entra_apply.add_argument("--company", required=True)
+
+    blueprint_parser = subparsers.add_parser("blueprint", help="Blueprint utilities.")
+    blueprint_sub = blueprint_parser.add_subparsers(dest="blueprint_command", required=True)
+    blueprint_generate = blueprint_sub.add_parser("generate", help="Generate a blueprint JSON.")
+    blueprint_generate.add_argument("--company", required=True)
+    blueprint_generate.add_argument("--seed", type=int, default=42)
+    blueprint_generate.add_argument("--roster", required=True)
+    blueprint_generate.add_argument("--output", "-o", required=True)
+    blueprint_generate.add_argument("--profile", default="engineering")
+    blueprint_generate.add_argument("--scale", default="small")
+
+    notion_parser = subparsers.add_parser("notion", help="Notion apply/verify.")
+    notion_sub = notion_parser.add_subparsers(dest="notion_command", required=True)
+    notion_verify = notion_sub.add_parser("verify-users", help="Verify users exist in Notion.")
+    notion_verify.add_argument("--roster", required=True)
+    notion_verify.add_argument("--state", default=None)
+    notion_verify.add_argument("--token", required=True)
+
+    notion_apply = notion_sub.add_parser("apply", help="Apply a blueprint to Notion.")
+    notion_apply.add_argument("blueprint")
+    notion_apply.add_argument("--root-page-id", required=True)
+    notion_apply.add_argument("--token", required=True)
+    notion_apply.add_argument("--state", default=None)
+    notion_apply.add_argument("--audit-dir", default="audit")
+    notion_apply.add_argument("--mode", choices=["apply", "plan"], default="apply")
+
+    notion_destroy = notion_sub.add_parser("destroy", help="Archive created pages.")
+    notion_destroy.add_argument("--token", required=True)
+    notion_destroy.add_argument("--state", default=None)
+    notion_destroy.add_argument("--audit-dir", default="audit")
+
+    notion_activity = notion_sub.add_parser("activity", help="Run synthetic activity.")
+    notion_activity.add_argument("blueprint")
+    notion_activity.add_argument("--token", required=True)
+    notion_activity.add_argument("--state", default=None)
+    notion_activity.add_argument("--audit-dir", default="audit")
+    notion_activity.add_argument("--tick-minutes", type=int, default=15)
+    notion_activity.add_argument("--jitter", type=float, default=0.3)
+    notion_activity.add_argument("--iterations", type=int, default=1)
+
+    llm_parser = subparsers.add_parser("llm", help="LLM enrichment.")
+    llm_sub = llm_parser.add_subparsers(dest="llm_command", required=True)
+    llm_enrich = llm_sub.add_parser("enrich", help="Enrich a blueprint using OpenAI.")
+    llm_enrich.add_argument("blueprint")
+    llm_enrich.add_argument("--output", "-o", required=True)
+    llm_enrich.add_argument("--cache-dir", default=".cache/llm")
+    llm_enrich.add_argument("--model", default="gpt-5.2")
+    llm_enrich.add_argument("--base-url", default=None)
+    llm_enrich.add_argument("--api-key", default=None)
+
     args = parser.parse_args(argv)
 
     if args.command == "generate":
@@ -105,6 +188,113 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(args.db)
         result = import_fixture(db, fixture, mode=args.mode)
         print(json.dumps(result.model_dump(), indent=2))
+        return 0
+
+    if args.command == "roster" and args.roster_command == "generate":
+        generate_roster(RosterConfig(seed=args.seed, users=args.users), args.output)
+        print(f"Wrote roster template to {args.output}")
+        return 0
+
+    if args.command == "entra" and args.entra_command == "apply":
+        roster = load_roster(args.roster)
+        groups: dict[str, list] = {}
+        for user in roster:
+            groups.setdefault(f"SYNTH-{args.company}-{user.team}", []).append(user)
+        client = GraphClient(
+            tenant_id=args.tenant_id,
+            client_id=args.client_id,
+            client_secret=args.client_secret,
+        )
+        store = connect_state(args.state)
+        result = apply_entra(
+            client=client,
+            roster=roster,
+            groups=groups,
+            store=store,
+            mode=args.mode,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result.__dict__, indent=2))
+        return 0
+
+    if args.command == "blueprint" and args.blueprint_command == "generate":
+        roster = load_roster(args.roster)
+        blueprint = generate_blueprint(
+            BlueprintConfig(
+                company=args.company,
+                seed=args.seed,
+                org_profile=args.profile,
+                scale=args.scale,
+            ),
+            roster=roster,
+        )
+        _write_blueprint(args.output, blueprint)
+        return 0
+
+    if args.command == "notion" and args.notion_command == "verify-users":
+        roster = load_roster(args.roster)
+        store = connect_state(args.state)
+        client = NotionClient(token=args.token)
+        matched = verify_users(
+            client, store, [user.model_dump() for user in roster]
+        )
+        print(json.dumps({"matched": matched, "total": len(roster)}, indent=2))
+        return 0
+
+    if args.command == "notion" and args.notion_command == "apply":
+        blueprint = _load_blueprint(args.blueprint)
+        store = connect_state(args.state)
+        run_id = stable_hash({"command": "notion-apply", "timestamp": utc_now()})
+        audit = AuditLog.open(args.audit_dir, run_id)
+        client = NotionClient(token=args.token)
+        result = apply_blueprint(
+            blueprint,
+            root_page_id=args.root_page_id,
+            store=store,
+            client=client,
+            audit=audit,
+            mode=args.mode,
+        )
+        print(json.dumps(result.__dict__, indent=2))
+        return 0
+
+    if args.command == "notion" and args.notion_command == "destroy":
+        store = connect_state(args.state)
+        run_id = stable_hash({"command": "notion-destroy", "timestamp": utc_now()})
+        audit = AuditLog.open(args.audit_dir, run_id)
+        client = NotionClient(token=args.token)
+        archived = destroy_blueprint(store, client, audit)
+        print(json.dumps({"archived": archived}, indent=2))
+        return 0
+
+    if args.command == "notion" and args.notion_command == "activity":
+        blueprint = _load_blueprint(args.blueprint)
+        store = connect_state(args.state)
+        run_id = stable_hash({"command": "notion-activity", "timestamp": utc_now()})
+        audit = AuditLog.open(args.audit_dir, run_id)
+        client = NotionClient(token=args.token)
+        executed = run_activity(
+            blueprint,
+            store=store,
+            client=client,
+            audit=audit,
+            tick_minutes=args.tick_minutes,
+            jitter=args.jitter,
+            iterations=args.iterations,
+        )
+        print(json.dumps({"executed": executed}, indent=2))
+        return 0
+
+    if args.command == "llm" and args.llm_command == "enrich":
+        blueprint = _load_blueprint(args.blueprint)
+        enriched = enrich_blueprint(
+            blueprint,
+            model=args.model,
+            cache_dir=args.cache_dir,
+            api_key=args.api_key,
+            base_url=args.base_url,
+        )
+        _write_blueprint(args.output, enriched)
         return 0
 
     parser.error("Unknown command")
@@ -154,6 +344,17 @@ def _write_fixture(output_path: str, fixture: Fixture) -> None:
 def _load_fixture(path: str) -> Fixture:
     raw = Path(path).read_text()
     return Fixture.model_validate_json(raw)
+
+
+def _write_blueprint(output_path: str, blueprint: Blueprint) -> None:
+    payload = json.dumps(blueprint.model_dump(), indent=2)
+    path = Path(output_path)
+    path.write_text(payload)
+
+
+def _load_blueprint(path: str) -> Blueprint:
+    raw = Path(path).read_text()
+    return Blueprint.model_validate_json(raw)
 
 
 if __name__ == "__main__":

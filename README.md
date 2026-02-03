@@ -54,6 +54,42 @@ notion-synth import fixture.json --mode merge
 Profiles are deterministic by seed, so enterprise users can reproduce datasets at scale without
 shipping any real data.
 
+## CLI (Real Notion + Entra)
+Generate a roster template:
+```bash
+notion-synth roster generate --seed 2026 --users 50 --output roster.csv
+```
+
+Provision Entra users + groups:
+```bash
+notion-synth entra apply --roster roster.csv --mode create \
+  --tenant-id "$ENTRA_TENANT_ID" --client-id "$ENTRA_CLIENT_ID" --client-secret "$ENTRA_CLIENT_SECRET" \
+  --company "Acme Robotics"
+```
+
+Generate a blueprint:
+```bash
+notion-synth blueprint generate --company "Acme Robotics" --seed 2026 \
+  --roster roster.csv --output blueprint.json --profile engineering --scale small
+```
+
+Optional LLM enrichment:
+```bash
+notion-synth llm enrich blueprint.json --output blueprint.enriched.json --cache-dir .cache/llm
+```
+
+Apply to Notion:
+```bash
+notion-synth notion apply blueprint.enriched.json --root-page-id "$ROOT_PAGE_ID" --token "$NOTION_TOKEN"
+```
+
+Run live activity:
+```bash
+notion-synth notion activity blueprint.enriched.json --token "$NOTION_TOKEN" --tick-minutes 15 --jitter 0.3
+```
+
+More details: `docs/NOTION.md`, `docs/ENTRA.md`, `docs/LLM.md`
+
 Totals via response header:
 ```bash
 curl -i "http://localhost:8000/pages?include_total=true"
