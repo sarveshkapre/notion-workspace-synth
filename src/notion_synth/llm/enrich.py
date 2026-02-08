@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -63,7 +63,7 @@ def enrich_blueprint(
 
 
 def _call_openai(base_url: str, api_key: str, model: str, prompt: str) -> dict[str, Any]:
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "input": prompt,
         "text": {
@@ -94,7 +94,9 @@ def _call_openai(base_url: str, api_key: str, model: str, prompt: str) -> dict[s
         except Exception:
             detail = {}
         if "json_schema" in str(detail) or "response_format" in str(detail) or "format" in str(detail):
-            payload["text"]["format"] = {"type": "json_object"}
+            text_payload = payload.get("text")
+            if isinstance(text_payload, dict):
+                text_payload["format"] = {"type": "json_object"}
             response = httpx.post(
                 f"{base_url}/responses",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -102,7 +104,7 @@ def _call_openai(base_url: str, api_key: str, model: str, prompt: str) -> dict[s
                 timeout=60,
             )
     response.raise_for_status()
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 def _extract_blocks(payload: dict[str, Any]) -> list[str]:
@@ -127,7 +129,7 @@ def _extract_blocks(payload: dict[str, Any]) -> list[str]:
                     blocks = parsed.get("append_blocks", [])
                     if isinstance(blocks, list):
                         return [str(item) for item in blocks][:4]
-                except Exception:
+                except json.JSONDecodeError:
                     continue
             if content.get("type") == "output_json":
                 parsed = content.get("json", {})

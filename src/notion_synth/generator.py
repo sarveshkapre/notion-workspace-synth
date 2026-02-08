@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import random
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Iterable
 
 from notion_synth.models import Comment, Database, DatabaseRow, Fixture, Page, User, Workspace
 
@@ -64,7 +64,8 @@ class SyntheticWorkspaceConfig:
 
 def generate_fixture(config: SyntheticWorkspaceConfig) -> Fixture:
     resolved = config.resolved()
-    rng = random.Random(resolved.seed)
+    # Deterministic synthetic fixture generation by seed.
+    rng = random.Random(resolved.seed)  # nosec B311
     base_time = _base_time(resolved.seed)
 
     workspace_id = _slug_id("ws", resolved.company_name)

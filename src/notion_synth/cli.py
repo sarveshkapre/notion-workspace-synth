@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -197,37 +196,37 @@ def main(argv: list[str] | None = None) -> int:
         _write_fixture(args.output, fixture)
         return 0
 
-    if args.command == "seed":
+    elif args.command == "seed":
         fixture = generate_fixture(_config_from_args(args))
         db = connect(args.db)
-        result = import_fixture(db, fixture, mode=args.mode)
-        print(json.dumps(result.model_dump(), indent=2))
+        fixture_result = import_fixture(db, fixture, mode=args.mode)
+        print(json.dumps(fixture_result.model_dump(), indent=2))
         return 0
 
-    if args.command == "export":
+    elif args.command == "export":
         db = connect(args.db)
         fixture = export_fixture(db)
         _write_fixture(args.output, fixture)
         return 0
 
-    if args.command == "import":
+    elif args.command == "import":
         fixture = _load_fixture(args.fixture)
         db = connect(args.db)
-        result = import_fixture(db, fixture, mode=args.mode)
-        print(json.dumps(result.model_dump(), indent=2))
+        fixture_result = import_fixture(db, fixture, mode=args.mode)
+        print(json.dumps(fixture_result.model_dump(), indent=2))
         return 0
 
-    if args.command == "roster" and args.roster_command == "generate":
+    elif args.command == "roster" and args.roster_command == "generate":
         generate_roster(RosterConfig(seed=args.seed, users=args.users), args.output)
         print(f"Wrote roster template to {args.output}")
         return 0
 
-    if args.command == "entra" and args.entra_command == "apply":
+    elif args.command == "entra" and args.entra_command == "apply":
         roster = load_roster(args.roster)
         groups: dict[str, list] = {}
         for user in roster:
             groups.setdefault(f"SYNTH-{args.company}-{user.team}", []).append(user)
-        client = GraphClient(
+        graph_client = GraphClient(
             tenant_id=args.tenant_id,
             client_id=args.client_id,
             client_secret=args.client_secret,
@@ -236,23 +235,23 @@ def main(argv: list[str] | None = None) -> int:
         run_id = stable_hash({"command": "entra-apply", "timestamp": utc_now()})
         record_run_start(store, run_id, "entra-apply", _hash_roster(args.roster))
         try:
-            result = apply_entra(
-                client=client,
+            apply_result = apply_entra(
+                client=graph_client,
                 roster=roster,
                 groups=groups,
                 store=store,
                 mode=args.mode,
                 dry_run=args.dry_run,
             )
-            _write_json(Path(args.report), result.__dict__)
+            _write_json(Path(args.report), apply_result.__dict__)
             record_run_finish(store, run_id, "ok")
-            print(json.dumps(result.__dict__, indent=2))
+            print(json.dumps(apply_result.__dict__, indent=2))
             return 0
         except Exception:
             record_run_finish(store, run_id, "error")
             raise
 
-    if args.command == "entra" and args.entra_command == "verify-provisioning":
+    elif args.command == "entra" and args.entra_command == "verify-provisioning":
         roster = load_roster(args.roster)
         graph = GraphClient(
             tenant_id=args.tenant_id,
@@ -264,39 +263,47 @@ def main(argv: list[str] | None = None) -> int:
         run_id = stable_hash({"command": "entra-verify", "timestamp": utc_now()})
         record_run_start(store, run_id, "entra-verify", _hash_roster(args.roster))
         deadline = time.time() + (args.wait_minutes * 60)
-        report = None
+        provisioning_report = None
         try:
             while True:
-                report = verify_provisioning(
+                provisioning_report = verify_provisioning(
                     graph=graph,
                     notion=notion,
                     roster=roster,
                     company=args.company,
                     store=store,
                 )
-                if not report.missing_in_notion and not report.missing_in_entra and not report.missing_groups:
+                if (
+                    not provisioning_report.missing_in_notion
+                    and not provisioning_report.missing_in_entra
+                    and not provisioning_report.missing_groups
+                ):
                     break
                 if time.time() >= deadline:
                     break
                 time.sleep(max(5, args.interval_seconds))
-            payload = {
-                "matched": report.matched if report else 0,
-                "total": report.total if report else 0,
-                "missing_in_entra": report.missing_in_entra if report else [],
-                "missing_in_notion": report.missing_in_notion if report else [],
-                "missing_groups": report.missing_groups if report else [],
+            verify_payload = {
+                "matched": provisioning_report.matched if provisioning_report else 0,
+                "total": provisioning_report.total if provisioning_report else 0,
+                "missing_in_entra": provisioning_report.missing_in_entra if provisioning_report else [],
+                "missing_in_notion": provisioning_report.missing_in_notion if provisioning_report else [],
+                "missing_groups": provisioning_report.missing_groups if provisioning_report else [],
             }
-            _write_json(Path(args.report), payload)
+            _write_json(Path(args.report), verify_payload)
             record_run_finish(store, run_id, "ok")
-            print(json.dumps(payload, indent=2))
-            if args.require_all and (payload["missing_in_entra"] or payload["missing_in_notion"] or payload["missing_groups"]):
+            print(json.dumps(verify_payload, indent=2))
+            if args.require_all and (
+                verify_payload["missing_in_entra"]
+                or verify_payload["missing_in_notion"]
+                or verify_payload["missing_groups"]
+            ):
                 return 2
             return 0
         except Exception:
             record_run_finish(store, run_id, "error")
             raise
 
-    if args.command == "blueprint" and args.blueprint_command == "generate":
+    elif args.command == "blueprint" and args.blueprint_command == "generate":
         roster = load_roster(args.roster)
         blueprint = generate_blueprint(
             BlueprintConfig(
@@ -310,60 +317,64 @@ def main(argv: list[str] | None = None) -> int:
         _write_blueprint(args.output, blueprint)
         return 0
 
-    if args.command == "notion" and args.notion_command == "verify-users":
+    elif args.command == "notion" and args.notion_command == "verify-users":
         roster = load_roster(args.roster)
         store = connect_state(args.state)
-        client = NotionClient(token=args.token)
-        result = verify_users(client, store, [user.model_dump() for user in roster])
-        report = {"matched": result.matched, "total": result.total, "missing": result.missing}
-        _write_json(Path(args.report), report)
-        print(json.dumps(report, indent=2))
-        if args.require_all and result.missing:
+        notion_client = NotionClient(token=args.token)
+        verify_result = verify_users(notion_client, store, [user.model_dump() for user in roster])
+        verify_report = {
+            "matched": verify_result.matched,
+            "total": verify_result.total,
+            "missing": verify_result.missing,
+        }
+        _write_json(Path(args.report), verify_report)
+        print(json.dumps(verify_report, indent=2))
+        if args.require_all and verify_result.missing:
             return 2
         return 0
 
-    if args.command == "notion" and args.notion_command == "validate-root":
-        client = NotionClient(token=args.token)
+    elif args.command == "notion" and args.notion_command == "validate-root":
+        notion_client = NotionClient(token=args.token)
         try:
-            page = client.get_page(args.root_page_id)
-            report = {"ok": True, "page_id": page.get("id")}
+            page = notion_client.get_page(args.root_page_id)
+            root_report = {"ok": True, "page_id": page.get("id")}
         except Exception as exc:
-            report = {"ok": False, "error": str(exc)}
-        _write_json(Path(args.report), report)
-        print(json.dumps(report, indent=2))
-        return 0 if report["ok"] else 2
+            root_report = {"ok": False, "error": str(exc)}
+        _write_json(Path(args.report), root_report)
+        print(json.dumps(root_report, indent=2))
+        return 0 if root_report["ok"] else 2
 
-    if args.command == "notion" and args.notion_command == "apply":
+    elif args.command == "notion" and args.notion_command == "apply":
         blueprint = _load_blueprint(args.blueprint)
         store = connect_state(args.state)
         run_id = stable_hash({"command": "notion-apply", "timestamp": utc_now()})
         record_run_start(store, run_id, "notion-apply", stable_hash(blueprint.model_dump()))
         audit = AuditLog.open(args.audit_dir, run_id, redact_emails=args.redact_emails)
-        client = NotionClient(token=args.token)
+        notion_client = NotionClient(token=args.token)
         try:
-            result = apply_blueprint(
+            notion_apply_result = apply_blueprint(
                 blueprint,
                 root_page_id=args.root_page_id,
                 store=store,
-                client=client,
+                client=notion_client,
                 audit=audit,
                 mode=args.mode,
             )
             record_run_finish(store, run_id, "ok")
-            print(json.dumps(result.__dict__, indent=2))
+            print(json.dumps(notion_apply_result.__dict__, indent=2))
             return 0
         except Exception:
             record_run_finish(store, run_id, "error")
             raise
 
-    if args.command == "notion" and args.notion_command == "destroy":
+    elif args.command == "notion" and args.notion_command == "destroy":
         store = connect_state(args.state)
         run_id = stable_hash({"command": "notion-destroy", "timestamp": utc_now()})
         record_run_start(store, run_id, "notion-destroy", "n/a")
         audit = AuditLog.open(args.audit_dir, run_id, redact_emails=args.redact_emails)
-        client = NotionClient(token=args.token)
+        notion_client = NotionClient(token=args.token)
         try:
-            archived = destroy_blueprint(store, client, audit)
+            archived = destroy_blueprint(store, notion_client, audit)
             record_run_finish(store, run_id, "ok")
             print(json.dumps({"archived": archived}, indent=2))
             return 0
@@ -371,18 +382,18 @@ def main(argv: list[str] | None = None) -> int:
             record_run_finish(store, run_id, "error")
             raise
 
-    if args.command == "notion" and args.notion_command == "activity":
+    elif args.command == "notion" and args.notion_command == "activity":
         blueprint = _load_blueprint(args.blueprint)
         store = connect_state(args.state)
         run_id = stable_hash({"command": "notion-activity", "timestamp": utc_now()})
         record_run_start(store, run_id, "notion-activity", stable_hash(blueprint.model_dump()))
         audit = AuditLog.open(args.audit_dir, run_id, redact_emails=args.redact_emails)
-        client = NotionClient(token=args.token)
+        notion_client = NotionClient(token=args.token)
         try:
             executed = run_activity(
                 blueprint,
                 store=store,
-                client=client,
+                client=notion_client,
                 audit=audit,
                 tick_minutes=args.tick_minutes,
                 jitter=args.jitter,
@@ -395,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             record_run_finish(store, run_id, "error")
             raise
 
-    if args.command == "llm" and args.llm_command == "enrich":
+    elif args.command == "llm" and args.llm_command == "enrich":
         blueprint = _load_blueprint(args.blueprint)
         enriched = enrich_blueprint(
             blueprint,

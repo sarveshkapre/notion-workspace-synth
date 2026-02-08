@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
-
 
 DEFAULT_NOTION_VERSION = "2022-06-28"
 
@@ -42,13 +41,13 @@ class NotionClient:
                 retries += 1
                 continue
             response.raise_for_status()
-            return response.json()
+            return cast(dict[str, Any], response.json())
 
     def list_users(self) -> list[dict[str, Any]]:
         users: list[dict[str, Any]] = []
         cursor: str | None = None
         while True:
-            payload = {"page_size": 100}
+            payload: dict[str, Any] = {"page_size": 100}
             if cursor:
                 payload["start_cursor"] = cursor
             data = self.request("POST", "/users/list", json=payload)
@@ -81,10 +80,10 @@ class NotionClient:
 
 
 def _retry_delay(response: httpx.Response, retries: int) -> float:
-    retry_after = response.headers.get("retry-after")
+    retry_after: str | None = response.headers.get("retry-after")
     if retry_after:
         try:
             return float(retry_after)
         except ValueError:
             pass
-    return min(2 ** retries, 20)
+    return float(min(2**retries, 20))

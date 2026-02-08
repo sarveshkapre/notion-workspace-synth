@@ -5,7 +5,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from notion_synth.audit import AuditLog
 from notion_synth.blueprint_models import Blueprint, PageSpec, RowPropertySpec
@@ -55,9 +55,8 @@ def verify_users(client: NotionClient, store: StateStore, roster: list[dict[str,
         if email and email in email_map:
             upsert_identity(store, row["synth_user_id"], notion_user_id=email_map[email], email=email)
             matched += 1
-        else:
-            if email:
-                missing.append(email)
+        elif email:
+            missing.append(email)
     total = len(roster)
     return VerifyResult(matched=matched, total=total, missing=missing)
 
@@ -331,7 +330,10 @@ def run_activity(
             if _execute_event(event, store, client, audit):
                 mark_event_run(store, event.event_id)
                 executed += 1
-        sleep_seconds = max(1.0, tick_minutes * 60 * (1 + random.uniform(-jitter, jitter)))
+        sleep_seconds = max(
+            1.0,
+            tick_minutes * 60 * (1 + random.uniform(-jitter, jitter)),  # nosec B311
+        )
         if iterations > 1:
             time.sleep(sleep_seconds)
     return executed
@@ -343,7 +345,7 @@ def _resolve_parent_id(parent_type: str, parent_synth_id: str, root_page_id: str
     existing = get_object(store, parent_synth_id)
     if not existing:
         raise ValueError(f"Parent synth id not found: {parent_synth_id}")
-    return existing["remote_id"]
+    return cast(str, existing["remote_id"])
 
 
 def _page_payload(parent_id: str, title: str, blocks: list[dict[str, Any]]) -> dict[str, Any]:

@@ -1,16 +1,19 @@
 import json
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from notion_synth.db import Database
 from notion_synth.models import (
     Comment,
-    Database as DatabaseModel,
     DatabaseRow,
     Fixture,
     FixtureImportResult,
     Page,
     User,
     Workspace,
+)
+from notion_synth.models import (
+    Database as DatabaseModel,
 )
 
 
@@ -246,6 +249,4 @@ def import_fixture(db: Database, payload: Fixture, mode: str = "replace") -> Fix
 
 
 def _utc_now() -> str:
-    from datetime import UTC, datetime
-
     return datetime.now(UTC).isoformat()

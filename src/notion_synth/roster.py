@@ -8,7 +8,6 @@ from pathlib import Path
 from notion_synth.blueprint_models import IdentityUser
 from notion_synth.util import stable_uuid
 
-
 ROSTER_FIELDS = [
     "synth_user_id",
     "display_name",
@@ -31,7 +30,8 @@ class RosterConfig:
 
 
 def generate_roster(config: RosterConfig, output_path: str) -> None:
-    rng = random.Random(config.seed)
+    # Deterministic synthetic roster generation by seed.
+    rng = random.Random(config.seed)  # nosec B311
     first_names = [
         "Alex",
         "Bianca",
@@ -135,7 +135,8 @@ def load_roster(path: str) -> list[IdentityUser]:
     resolved: list[IdentityUser] = []
     with Path(path).open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        missing = [field for field in ROSTER_FIELDS if field not in reader.fieldnames]
+        fieldnames = reader.fieldnames or []
+        missing = [field for field in ROSTER_FIELDS if field not in fieldnames]
         if missing:
             raise ValueError(f"Roster missing fields: {', '.join(missing)}")
         for row in reader:

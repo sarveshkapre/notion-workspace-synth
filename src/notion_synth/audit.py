@@ -15,7 +15,7 @@ class AuditLog:
     redact_emails: bool = False
 
     @classmethod
-    def open(cls, directory: str, run_id: str, *, redact_emails: bool = False) -> "AuditLog":
+    def open(cls, directory: str, run_id: str, *, redact_emails: bool = False) -> AuditLog:
         path = Path(directory)
         path.mkdir(parents=True, exist_ok=True)
         return cls(path / f"{run_id}.jsonl", redact_emails=redact_emails)

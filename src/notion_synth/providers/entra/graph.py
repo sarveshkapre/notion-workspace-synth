@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -29,7 +29,7 @@ class GraphClient:
             timeout=self.timeout,
         )
         response.raise_for_status()
-        return response.json()["access_token"]
+        return cast(str, response.json()["access_token"])
 
     def request(self, method: str, path: str, *, json: Any | None = None) -> dict[str, Any]:
         token = self._token()
@@ -50,7 +50,7 @@ class GraphClient:
             response.raise_for_status()
             if response.status_code == 204:
                 return {}
-            return response.json()
+            return cast(dict[str, Any], response.json())
 
     def find_user_by_upn(self, upn: str) -> dict[str, Any] | None:
         encoded = upn.replace("'", "''")

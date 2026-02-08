@@ -44,12 +44,14 @@ def verify_provisioning(
 
     # Notion users
     notion_users = notion.list_users()
-    email_map = {}
-    for user in notion_users:
-        person = user.get("person") or {}
+    email_map: dict[str, str] = {}
+    for notion_user in notion_users:
+        person = notion_user.get("person") or {}
         email = person.get("email")
         if email:
-            email_map[email.lower()] = user.get("id")
+            notion_user_id = notion_user.get("id")
+            if notion_user_id:
+                email_map[email.lower()] = notion_user_id
 
     matched = 0
     for user in roster:
@@ -57,9 +59,8 @@ def verify_provisioning(
         if email and email in email_map:
             upsert_identity(store, user.synth_user_id, notion_user_id=email_map[email], email=email)
             matched += 1
-        else:
-            if email:
-                missing_in_notion.append(email)
+        elif email:
+            missing_in_notion.append(email)
 
     return ProvisioningReport(
         total=len(roster),

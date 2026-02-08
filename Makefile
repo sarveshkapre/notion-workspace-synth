@@ -1,14 +1,16 @@
 PYTHON ?= python3
 VENV ?= .venv
-PIP := $(VENV)/bin/pip
-PY := $(VENV)/bin/python
+VENV_PIP := $(VENV)/bin/pip
+VENV_PY := $(VENV)/bin/python
+PIP := $(if $(wildcard $(VENV_PIP)),$(VENV_PIP),$(PYTHON) -m pip)
+PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(PYTHON))
 
 .PHONY: setup dev test lint typecheck build check security release
 
 setup:
 	$(PYTHON) -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	$(PIP) install -e .[dev]
+	$(VENV_PIP) install --upgrade pip
+	$(VENV_PIP) install -e .[dev]
 
 dev:
 	$(PY) -m uvicorn notion_synth.main:app --reload --host 0.0.0.0 --port 8000

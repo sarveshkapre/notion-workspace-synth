@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from notion_synth.blueprint_models import (
     ActivityEvent,
+    BlockSpec,
     Blueprint,
     CommentSpec,
     DatabaseSpec,
@@ -18,7 +19,6 @@ from notion_synth.blueprint_models import (
     RootSpec,
     RowPropertySpec,
     RowSpec,
-    BlockSpec,
 )
 from notion_synth.util import stable_uuid, utc_now
 
@@ -48,7 +48,8 @@ def generate_blueprint(
     config: BlueprintConfig,
     roster: list[IdentityUser],
 ) -> Blueprint:
-    rng = random.Random(config.seed)
+    # Deterministic synthetic fixture generation by seed.
+    rng = random.Random(config.seed)  # nosec B311
     preset = SCALE_PRESETS.get(config.scale, SCALE_PRESETS["small"])
     teams = sorted({user.team for user in roster if user.team})
     if not teams:

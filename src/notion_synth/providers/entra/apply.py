@@ -33,7 +33,7 @@ def apply_entra(
     result = EntraApplyResult()
 
     group_ids: dict[str, str] = {}
-    for group_name, members in groups.items():
+    for group_name, _members in groups.items():
         existing = client.find_group_by_name(group_name)
         if existing:
             group_ids[group_name] = existing["id"]

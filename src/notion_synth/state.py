@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Iterable
+from typing import Any, cast
 
 
 @dataclass
@@ -20,7 +21,7 @@ class StateStore:
     def query_one(self, query: str, params: Iterable[Any] | None = None) -> sqlite3.Row | None:
         cursor = self.connection.cursor()
         cursor.execute(query, tuple(params or ()))
-        return cursor.fetchone()
+        return cast(sqlite3.Row | None, cursor.fetchone())
 
     def query_all(self, query: str, params: Iterable[Any] | None = None) -> list[sqlite3.Row]:
         cursor = self.connection.cursor()
