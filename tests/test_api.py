@@ -172,6 +172,36 @@ def test_delete_page_also_deletes_comments() -> None:
     assert client.get("/comments?page_id=page_home").json() == []
 
 
+def test_delete_user_also_deletes_authored_comments() -> None:
+    client = _client()
+
+    assert len(client.get("/comments?author_id=user_alex").json()) == 1
+    deleted = client.delete("/users/user_alex")
+    assert deleted.status_code == 204
+
+    assert client.get("/users/user_alex").status_code == 404
+    assert client.get("/comments?author_id=user_alex").json() == []
+    assert len(client.get("/comments").json()) == 1
+
+
+def test_comment_get_and_delete() -> None:
+    client = _client()
+    created = client.post(
+        "/comments",
+        json={"page_id": "page_home", "author_id": "user_bianca", "body": "Ship it."},
+    )
+    assert created.status_code == 201
+    comment_id = created.json()["id"]
+
+    fetched = client.get(f"/comments/{comment_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["body"] == "Ship it."
+
+    deleted = client.delete(f"/comments/{comment_id}")
+    assert deleted.status_code == 204
+    assert client.get(f"/comments/{comment_id}").status_code == 404
+
+
 def test_database_update_delete_and_rows_crud() -> None:
     client = _client()
 
@@ -215,6 +245,26 @@ def test_database_update_delete_and_rows_crud() -> None:
     deleted_db = client.delete(f"/databases/{db_id}")
     assert deleted_db.status_code == 204
     assert client.get(f"/databases/{db_id}").status_code == 404
+
+
+def test_database_rows_filtering_and_total_header() -> None:
+    client = _client()
+    response = client.get(
+        "/databases/db_tasks/rows?property_name=Task&property_value_contains=Prototype&include_total=true"
+    )
+    assert response.status_code == 200
+    assert response.headers.get("x-total-count") == "1"
+
+    rows = response.json()
+    assert len(rows) == 1
+    assert rows[0]["id"] == "row_1"
+
+    status_rows = client.get(
+        "/databases/db_tasks/rows?property_name=Status&property_value_contains=Done"
+    )
+    assert status_rows.status_code == 200
+    assert len(status_rows.json()) == 1
+    assert status_rows.json()[0]["id"] == "row_2"
 
 
 def test_create_database_rejects_invalid_workspace() -> None:

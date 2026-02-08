@@ -54,6 +54,11 @@ def _parse_json(value: str) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(value))
 
 
+def _json_path_for_property(property_name: str) -> str:
+    escaped = property_name.replace('"', '\\"')
+    return f'$."{escaped}"'
+
+
 def _homepage_html() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -356,6 +361,27 @@ def create_user(payload: UserCreate, request: Request) -> User:
     )
 
 
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(user_id: str, request: Request) -> Response:
+    db = _get_db(request)
+    row = db.query_one("SELECT id FROM users WHERE id = ?", [user_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    conn = db.connection
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        cursor.execute("DELETE FROM comments WHERE author_id = ?", [user_id])
+        cursor.execute("DELETE FROM users WHERE id = ?", [user_id])
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete user") from exc
+
+    return Response(status_code=204)
+
+
 @router.get("/pages", response_model=list[Page])
 def list_pages(
     request: Request,
@@ -500,6 +526,7 @@ def delete_page(page_id: str, request: Request) -> Response:
 
     return Response(status_code=204)
 
+
 @router.get("/databases", response_model=list[DatabaseModel])
 def list_databases(
     request: Request,
@@ -621,28 +648,45 @@ def delete_database(database_id: str, request: Request) -> Response:
 
     return Response(status_code=204)
 
+
 @router.get("/databases/{database_id}/rows", response_model=list[DatabaseRow])
 def list_database_rows(
     database_id: str,
     request: Request,
     response: Response,
+    property_name: str | None = Query(default=None, min_length=1),
+    property_value_contains: str | None = Query(default=None, min_length=1),
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
 ) -> list[DatabaseRow]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
+
+    conditions: list[str] = ["database_id = ?"]
+    params: list[Any] = [database_id]
+    if property_name:
+        property_path = _json_path_for_property(property_name)
+        if property_value_contains:
+            conditions.append("CAST(json_extract(properties_json, ?) AS TEXT) LIKE ?")
+            params.extend([property_path, f"%{property_value_contains}%"])
+        else:
+            conditions.append("json_extract(properties_json, ?) IS NOT NULL")
+            params.append(property_path)
+    elif property_value_contains:
+        conditions.append("properties_json LIKE ?")
+        params.append(f"%{property_value_contains}%")
+
+    where = f"WHERE {' AND '.join(conditions)}"
     if include_total:
-        count_row = db.query_one(
-            "SELECT COUNT(*) AS count FROM database_rows WHERE database_id = ?",
-            [database_id],
+        count_row = db.query_one(  # nosec B608
+            f"SELECT COUNT(*) AS count FROM database_rows {where}",  # nosec B608
+            params,
         )
         _set_total_header(response, int(count_row["count"]) if count_row else 0)
     rows = db.query_all(
-        """
-        SELECT * FROM database_rows WHERE database_id = ? ORDER BY created_at LIMIT ? OFFSET ?
-        """,
-        [database_id, limit, offset],
+        f"SELECT * FROM database_rows {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
+        [*params, limit, offset],
     )
     return [
         DatabaseRow(**{**dict(row), "properties": _parse_json(row["properties_json"])})
@@ -731,6 +775,7 @@ def delete_database_row(database_id: str, row_id: str, request: Request) -> Resp
         raise HTTPException(status_code=404, detail="Database row not found")
     return Response(status_code=204)
 
+
 @router.get("/comments", response_model=list[Comment])
 def list_comments(
     request: Request,
@@ -765,6 +810,15 @@ def list_comments(
     return [Comment(**dict(row)) for row in rows]
 
 
+@router.get("/comments/{comment_id}", response_model=Comment)
+def get_comment(comment_id: str, request: Request) -> Comment:
+    db = _get_db(request)
+    row = db.query_one("SELECT * FROM comments WHERE id = ?", [comment_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return Comment(**dict(row))
+
+
 @router.post("/comments", response_model=Comment, status_code=201)
 def create_comment(payload: CommentCreate, request: Request) -> Comment:
     db = _get_db(request)
@@ -791,3 +845,12 @@ def create_comment(payload: CommentCreate, request: Request) -> Comment:
         body=payload.body,
         created_at=now,
     )
+
+
+@router.delete("/comments/{comment_id}", status_code=204)
+def delete_comment(comment_id: str, request: Request) -> Response:
+    db = _get_db(request)
+    cursor = db.execute("DELETE FROM comments WHERE id = ?", [comment_id])
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return Response(status_code=204)
