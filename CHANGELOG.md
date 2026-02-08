@@ -1,6 +1,13 @@
 # CHANGELOG
 
 ## [Unreleased]
+- Fix CI/tooling reliability by allowing `make` targets to fall back to environment Python when `.venv` is absent.
+- Add regression coverage for Makefile Python fallback (`tests/test_makefile.py`).
+- Add `DELETE /users/{user_id}` with authored-comment cascade semantics.
+- Add `GET /comments/{comment_id}` and `DELETE /comments/{comment_id}`.
+- Add row query filters on `GET /databases/{database_id}/rows` via `property_name` and `property_value_contains`.
+- Align FastAPI app version metadata with package version (`0.2.0`).
+- Stabilize lint/type/security gates across CLI/provider modules so `make check` and `make security` pass in CI.
 - Add landing page at `/` for quick navigation and curl snippets.
 - Add `GET /stats` for dataset counts and DB path.
 - Add list filtering and optional `X-Total-Count` header via `include_total=true`.

@@ -20,6 +20,6 @@
 - Docs: `GET /docs`
 
 ## Next 3 improvements
-1. Add export/import fixtures for demo datasets.
-2. Add request/response examples for common flows.
-3. Add richer synthetic fixture packs (optional).
+1. Add workspace deletion endpoint with explicit cascade semantics.
+2. Add richer database row query operators and indexing guidance.
+3. Add mocked provider integration tests for Notion/Entra CLI commands.

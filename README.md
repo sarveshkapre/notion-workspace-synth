@@ -32,6 +32,32 @@ curl -X POST http://localhost:8000/workspaces -H "content-type: application/json
 curl -X POST http://localhost:8000/users -H "content-type: application/json" -d '{"workspace_id":"ws_...","name":"Taylor","email":"taylor@example.com"}'
 ```
 
+Common API flow (create + query + delete):
+```bash
+# 1) Create a page
+curl -sS -X POST http://localhost:8000/pages \
+  -H "content-type: application/json" \
+  -d '{"workspace_id":"ws_demo","title":"Sprint Notes","content":{"blocks":["Kickoff"]},"parent_type":"workspace","parent_id":"ws_demo"}'
+# -> {"id":"page_...","title":"Sprint Notes",...}
+
+# 2) Create a database and row
+DB_ID=$(curl -sS -X POST http://localhost:8000/databases \
+  -H "content-type: application/json" \
+  -d '{"workspace_id":"ws_demo","name":"Tickets","schema":{"properties":{"Title":{"type":"title"},"Status":{"type":"select"}}}}' \
+  | jq -r '.id')
+curl -sS -X POST "http://localhost:8000/databases/$DB_ID/rows" \
+  -H "content-type: application/json" \
+  -d '{"properties":{"Title":"Investigate latency","Status":"In Progress"}}'
+# -> {"id":"row_...","database_id":"db_...",...}
+
+# 3) Filter rows by property value
+curl -sS "http://localhost:8000/databases/$DB_ID/rows?property_name=Status&property_value_contains=Progress"
+
+# 4) Delete comment or user (user delete cascades authored comments)
+curl -X DELETE http://localhost:8000/comments/comment_1
+curl -X DELETE http://localhost:8000/users/user_alex
+```
+
 ## CLI (Enterprise Synth)
 Generate a full engineering workspace with multiple users, pages, and databases:
 ```bash
@@ -118,6 +144,8 @@ Update/delete:
 ```bash
 curl -X PATCH http://localhost:8000/databases/db_tasks -H "content-type: application/json" -d '{"name":"Task Board v2"}'
 curl -X DELETE http://localhost:8000/pages/page_home
+curl -X DELETE http://localhost:8000/comments/comment_1
+curl -X DELETE http://localhost:8000/users/user_alex
 ```
 
 ## Configuration

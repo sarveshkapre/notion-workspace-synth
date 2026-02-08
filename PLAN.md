@@ -33,6 +33,6 @@ More details: `docs/PROJECT.md`
 - Added update/delete endpoints for pages/databases/rows, plus basic FK validations on create endpoints.
 
 ## Ship next (tight scope)
-- Add parent filtering for databases/rows where relevant (and document conventions).
-- Add request/response examples to docs for common flows (create page, create db, insert row).
-- Add delete endpoints for users/comments with safe cascade semantics.
+- Add workspace deletion endpoint with explicit cascade policy (users/pages/databases/comments).
+- Add richer row querying (exact match and multi-property filters) with indexed lookup strategy.
+- Add focused provider integration tests (mocked Notion/Graph HTTP interactions) for CLI reliability.
