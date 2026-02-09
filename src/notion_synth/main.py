@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from notion_synth import __version__
 from notion_synth.db import connect
+from notion_synth.errors import install_error_handlers
 from notion_synth.fault_injection import FaultInjectionMiddleware, fault_injection_enabled
 from notion_synth.routes import router
 
@@ -36,6 +37,7 @@ def _cors_allow_credentials() -> bool:
 def create_app(db_path: str | None = None) -> FastAPI:
     app = FastAPI(title="Notion Workspace Synth", version=__version__)
     app.state.db = connect(db_path)
+    install_error_handlers(app)
     cors_origins = _cors_origins()
     if cors_origins:
         # For browser demo clients: expose paging/metadata headers.
@@ -46,6 +48,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
             expose_headers=[
+                "X-Request-Id",
                 "X-Total-Count",
                 "X-Limit",
                 "X-Offset",
