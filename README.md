@@ -158,6 +158,22 @@ curl -X DELETE http://localhost:8000/users/user_alex
 - `NOTION_SYNTH_DB` (optional): path to SQLite DB file. Default: `./notion_synth.db`
 - `NOTION_SYNTH_SQLITE_WAL` (optional): set to `1` to enable SQLite WAL mode (better concurrent readers; still single-writer).
 - `NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS` (optional): SQLite `busy_timeout` in ms (default: `5000`).
+- `NOTION_SYNTH_ADMIN` (optional): set to `1` to enable admin endpoints (currently `POST /admin/reset`).
+- `NOTION_SYNTH_FAULT_INJECTION` (optional): set to `1` to enable demo fault injection query params (`delay_ms`, `fail_rate`, `fail_status`).
+
+Admin reset (wipe DB and restore seeded demo org):
+```bash
+NOTION_SYNTH_ADMIN=1 make dev
+curl -sS -X POST "http://localhost:8000/admin/reset?dry_run=true"
+curl -sS -X POST "http://localhost:8000/admin/reset?confirm=true"
+```
+
+Fault injection (opt-in):
+```bash
+NOTION_SYNTH_FAULT_INJECTION=1 make dev
+curl -i "http://localhost:8000/health?delay_ms=250"
+curl -i "http://localhost:8000/health?fail_rate=1&fail_status=503"
+```
 
 ## Docker
 ```bash

@@ -84,12 +84,30 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Trust: `local`
 - Confidence: `medium`
 
+### 2026-02-09: Add env-guarded admin reset endpoint for deterministic demos
+- Decision: add `POST /admin/reset` (requires `NOTION_SYNTH_ADMIN=1`) supporting `dry_run=true` preview and `confirm=true` destructive reset that restores the seeded demo org.
+- Why: demos and integration tests frequently need a deterministic way to return to a known-good dataset without manually deleting the SQLite file.
+- Evidence: `src/notion_synth/routes.py` (`POST /admin/reset`), `src/notion_synth/db.py::seed_demo(force=True)`, `tests/test_api.py::test_admin_reset_confirm_wipes_and_reseeds`.
+- Commit: `dc1e7aa`
+- Trust: `local`
+- Confidence: `high`
+
+### 2026-02-09: Add opt-in fault injection middleware for demo/test realism
+- Decision: add fault injection middleware behind `NOTION_SYNTH_FAULT_INJECTION=1` supporting `delay_ms`, `fail_rate`, and `fail_status`.
+- Why: explicit latency/failure simulation is a baseline expectation for mocking tools and makes client retry / timeout behavior testable against the synthetic API.
+- Evidence: `src/notion_synth/fault_injection.py`, `src/notion_synth/main.py`, `tests/test_fault_injection.py`.
+- Commit: `496df9f`
+- Trust: `local`
+- Confidence: `medium`
+
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
 - `make check` (pass) on 2026-02-09 (pagination headers).
 - `make check` (pass) on 2026-02-09 (page search).
 - `make security` (pass) on 2026-02-09.
 - `make security` (pass) on 2026-02-09 (page search bandit annotation).
+- `make check` (pass) on 2026-02-09 (admin reset + fault injection).
+- `make security` (pass) on 2026-02-09 (fault injection).
 - Smoke (pass) on 2026-02-09:
   - `TMP_BASE=$(mktemp /tmp/notion_synth.XXXXXX) && TMP_DB="$TMP_BASE.db" && mv "$TMP_BASE" "$TMP_DB" && NOTION_SYNTH_DB=$TMP_DB .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8001`
   - `curl -sS http://127.0.0.1:8001/health`
@@ -99,12 +117,23 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `NOTION_SYNTH_DB=$(mktemp /tmp/notion_synth.XXXXXX).db .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8012`
   - `curl -sS "http://127.0.0.1:8012/search/pages?q=Welcome"`
   - `curl -sS -D - "http://127.0.0.1:8012/pages?limit=1&include_pagination=true" -o /dev/null`
+- Smoke (pass) on 2026-02-09 (admin reset + fault injection):
+  - `NOTION_SYNTH_ADMIN=1 NOTION_SYNTH_FAULT_INJECTION=1 NOTION_SYNTH_DB=$(mktemp /tmp/notion_synth.XXXXXX).db .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8015`
+  - `curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8015/health` -> `200`
+  - `curl -sS -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:8015/admin/reset?dry_run=true"` -> `200`
+  - `curl -sS -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:8015/admin/reset?confirm=true"` -> `200`
+  - `curl -sS -D - -o /dev/null "http://127.0.0.1:8015/health?delay_ms=7" | rg -i "^x-notion-synth-delay-ms:"` -> `x-notion-synth-delay-ms: 7`
+  - `curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:8015/health?fail_rate=1&fail_status=503"` -> `503`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21812172624 --exit-status`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21817594404 --exit-status`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21817620448 --exit-status`
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21825051363 --exit-status`
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21825081080 --exit-status`
 
 ## Mistakes And Fixes
 - 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.

@@ -15,6 +15,8 @@
 - Optional: `NOTION_SYNTH_DB=./notion_synth.db`
 - Optional: `NOTION_SYNTH_SQLITE_WAL=1` (enables WAL; better concurrent readers, still single-writer)
 - Optional: `NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS=5000` (default; reduces transient lock errors)
+- Optional: `NOTION_SYNTH_ADMIN=1` (enables admin endpoints like `POST /admin/reset?confirm=true`)
+- Optional: `NOTION_SYNTH_FAULT_INJECTION=1` (enables opt-in demo fault injection via query params)
 
 ## Concurrency notes
 - This is intended for local/dev usage; SQLite is effectively single-writer.
@@ -37,6 +39,6 @@ WHERE database_id = 'db_tasks';
 - Docs: `GET /docs`
 
 ## Next 3 improvements
-1. Add workspace deletion endpoint with explicit cascade semantics.
-2. Add richer database row query operators and indexing guidance.
-3. Add mocked provider integration tests for Notion/Entra CLI commands.
+1. Add Docker Compose for local demos (API + persisted SQLite volume).
+2. Add fixture “packs” (engineering/org presets) to improve realism without external dependencies.
+3. Add synthetic file attachments metadata (minimal shape, no blob hosting).

@@ -3,6 +3,8 @@
 ## [Unreleased]
 - Add pagination metadata headers on list endpoints via `include_pagination=true` (includes `Link: <...>; rel="next"`).
 - Add `GET /search/pages?q=...` page search endpoint with best-effort SQLite FTS5 backing (fallback to `LIKE` scans).
+- Add env-guarded admin reset endpoint (`POST /admin/reset?confirm=true`) to wipe and restore seeded demo data for deterministic demos.
+- Add opt-in fault injection middleware for demos/tests (`NOTION_SYNTH_FAULT_INJECTION=1` + `delay_ms` / `fail_rate` / `fail_status` query params).
 
 ## [0.2.0] - 2026-02-09
 - Fix CI/tooling reliability by allowing `make` targets to fall back to environment Python when `.venv` is absent.
