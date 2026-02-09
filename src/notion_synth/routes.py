@@ -1,6 +1,6 @@
 import json
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
@@ -57,6 +57,18 @@ def _parse_json(value: str) -> dict[str, Any]:
 def _json_path_for_property(property_name: str) -> str:
     escaped = property_name.replace('"', '\\"')
     return f'$."{escaped}"'
+
+
+def _parse_property_equals(expr: str) -> tuple[str, str]:
+    for sep in ("=", ":"):
+        if sep in expr:
+            name, value = expr.split(sep, 1)
+            name = name.strip()
+            value = value.strip()
+            if not name or not value:
+                break
+            return name, value
+    raise ValueError("Invalid property_equals; expected 'Name:Value' (repeatable)")
 
 
 def _count(db: Database, query: str, params: list[Any]) -> int:
@@ -760,6 +772,13 @@ def list_database_rows(
     response: Response,
     property_name: str | None = Query(default=None, min_length=1),
     property_value_contains: str | None = Query(default=None, min_length=1),
+    property_value_equals: str | None = Query(default=None, min_length=1),
+    property_equals: Annotated[
+        list[str] | None,
+        Query(
+            description="Repeatable exact-match filters like 'Status:Done'. All provided filters are ANDed.",
+        ),
+    ] = None,
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
@@ -769,9 +788,23 @@ def list_database_rows(
 
     conditions: list[str] = ["database_id = ?"]
     params: list[Any] = [database_id]
+    if property_value_equals and not property_name:
+        raise HTTPException(status_code=400, detail="property_value_equals requires property_name")
+
+    for expr in property_equals or []:
+        try:
+            name, value = _parse_property_equals(expr)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        conditions.append("CAST(json_extract(properties_json, ?) AS TEXT) = ?")
+        params.extend([_json_path_for_property(name), value])
+
     if property_name:
         property_path = _json_path_for_property(property_name)
-        if property_value_contains:
+        if property_value_equals:
+            conditions.append("CAST(json_extract(properties_json, ?) AS TEXT) = ?")
+            params.extend([property_path, property_value_equals])
+        elif property_value_contains:
             conditions.append("CAST(json_extract(properties_json, ?) AS TEXT) LIKE ?")
             params.extend([property_path, f"%{property_value_contains}%"])
         else:

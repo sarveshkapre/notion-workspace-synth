@@ -347,6 +347,26 @@ def test_database_rows_filtering_and_total_header() -> None:
     assert len(status_rows.json()) == 1
     assert status_rows.json()[0]["id"] == "row_2"
 
+    status_exact = client.get(
+        "/databases/db_tasks/rows?property_name=Status&property_value_equals=Done&include_total=true"
+    )
+    assert status_exact.status_code == 200
+    assert status_exact.headers.get("x-total-count") == "1"
+    assert [row["id"] for row in status_exact.json()] == ["row_2"]
+
+    status_equals = client.get("/databases/db_tasks/rows?property_equals=Status:Done")
+    assert status_equals.status_code == 200
+    assert [row["id"] for row in status_equals.json()] == ["row_2"]
+
+    multi = client.get(
+        "/databases/db_tasks/rows?property_equals=Status:Done&property_equals=Task:Seed%20demo%20data"
+    )
+    assert multi.status_code == 200
+    assert [row["id"] for row in multi.json()] == ["row_2"]
+
+    rejected = client.get("/databases/db_tasks/rows?property_equals=badformat")
+    assert rejected.status_code == 400
+
 
 def test_create_database_rejects_invalid_workspace() -> None:
     client = _client()
