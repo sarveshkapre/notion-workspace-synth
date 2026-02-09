@@ -1,13 +1,14 @@
 # ROADMAP
 
 ## Near-term
-- Add more realistic synthetic fixtures (optional packs).
+- Add more realistic synthetic fixtures (more packs + profiles).
 
 ## Later
 - Add synthetic file attachments metadata.
 - Add ingest API for external fixtures.
 
 ## Done
+- 2026-02-09: Add fixture packs: `GET /packs` plus admin-gated `POST /admin/apply-pack` for deterministic realistic datasets.
 - 2026-02-09: Add request/response examples in docs for list filters + paging patterns.
 - 2026-02-09: Add optional CORS support for local demo UIs (env-configured allowed origins).
 - 2026-02-09: Add Docker Compose for local demos (API + persisted SQLite volume) and “safe demo” guidance.

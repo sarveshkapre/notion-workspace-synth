@@ -42,6 +42,6 @@ WHERE database_id = 'db_tasks';
 - Docs: `GET /docs`
 
 ## Next 3 improvements
-1. Add fixture “packs” (engineering/org presets) to improve realism without external dependencies.
+1. Expand synthetic data beyond engineering by adding more generator profiles (e.g. sales/CS, marketing).
 2. Add synthetic file attachments metadata (minimal shape, no blob hosting).
 3. Add ingest API for external fixtures (validate + merge policies).
