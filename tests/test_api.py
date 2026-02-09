@@ -117,6 +117,16 @@ def test_delete_workspace_requires_cascade_and_cascades() -> None:
     assert detail["counts"]["database_rows"] == 1
     assert detail["counts"]["comments"] == 1
 
+    preview = client.delete(f"/workspaces/{ws_id}?dry_run=true")
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["workspace_id"] == ws_id
+    assert body["requires_force"] is False
+    assert body["requires_cascade"] is True
+    assert body["can_delete"] is False
+    assert body["counts"]["users"] == 1
+    assert client.get(f"/workspaces/{ws_id}").status_code == 200
+
     deleted = client.delete(f"/workspaces/{ws_id}?cascade=true")
     assert deleted.status_code == 204
     assert client.get(f"/workspaces/{ws_id}").status_code == 404
@@ -128,6 +138,18 @@ def test_delete_workspace_requires_cascade_and_cascades() -> None:
 
 def test_delete_demo_workspace_requires_force() -> None:
     client = _client()
+
+    preview = client.delete("/workspaces/ws_demo?dry_run=true")
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["workspace_id"] == "ws_demo"
+    assert body["requires_force"] is True
+    assert body["requires_cascade"] is True
+    assert body["can_delete"] is False
+
+    preview_ok = client.delete("/workspaces/ws_demo?dry_run=true&cascade=true&force=true")
+    assert preview_ok.status_code == 200
+    assert preview_ok.json()["can_delete"] is True
 
     refused = client.delete("/workspaces/ws_demo?cascade=true")
     assert refused.status_code == 400

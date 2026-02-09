@@ -66,6 +66,20 @@ class Comment(BaseModel):
 
 
 class PageCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "workspace_id": "ws_demo",
+                    "title": "Sprint Notes",
+                    "content": {"type": "doc", "blocks": ["Kickoff", "Decisions", "Next steps"]},
+                    "parent_type": "workspace",
+                    "parent_id": "ws_demo",
+                }
+            ]
+        }
+    )
+
     workspace_id: str
     title: str
     content: dict[str, Any]
@@ -74,12 +88,40 @@ class PageCreate(BaseModel):
 
 
 class PageUpdate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "title": "Sprint Notes v2",
+                    "content": {"type": "doc", "blocks": ["Updated kickoff notes"]},
+                }
+            ]
+        }
+    )
+
     title: str | None = None
     content: dict[str, Any] | None = None
 
 
 class DatabaseCreate(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "workspace_id": "ws_demo",
+                    "name": "Tickets",
+                    "schema": {
+                        "properties": {
+                            "Title": {"type": "title"},
+                            "Status": {"type": "select"},
+                            "Owner": {"type": "person"},
+                        }
+                    },
+                }
+            ]
+        },
+    )
 
     workspace_id: str
     name: str
@@ -87,34 +129,98 @@ class DatabaseCreate(BaseModel):
 
 
 class DatabaseUpdate(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "Tickets v2",
+                    "schema": {"properties": {"Title": {"type": "title"}, "Status": {"type": "select"}}},
+                }
+            ]
+        },
+    )
 
     name: str | None = None
     schema_: dict[str, Any] | None = Field(default=None, alias="schema")
 
 
 class DatabaseRowCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"properties": {"Title": "Investigate latency", "Status": "In Progress", "Owner": "Alex Rivers"}}
+            ]
+        }
+    )
+
     properties: dict[str, Any]
 
 
 class DatabaseRowUpdate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={"examples": [{"properties": {"Status": "Done"}}]}
+    )
+
     properties: dict[str, Any] | None = None
 
 
 class CommentCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"page_id": "page_home", "author_id": "user_alex", "body": "Kickoff complete."}]
+        }
+    )
+
     page_id: str
     author_id: str
     body: str
 
 
 class WorkspaceCreate(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"name": "Acme"}]})
+
     name: str
 
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"workspace_id": "ws_demo", "name": "Taylor", "email": "taylor@example.com"}]
+        }
+    )
+
     workspace_id: str
     name: str
     email: str
+
+
+class WorkspaceDeletePreview(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "workspace_id": "ws_demo",
+                    "requires_force": True,
+                    "requires_cascade": True,
+                    "can_delete": False,
+                    "counts": {
+                        "users": 3,
+                        "pages": 2,
+                        "databases": 1,
+                        "database_rows": 2,
+                        "comments": 2,
+                    },
+                }
+            ]
+        }
+    )
+
+    workspace_id: str
+    requires_force: bool
+    requires_cascade: bool
+    can_delete: bool
+    counts: dict[str, int]
 
 
 class Fixture(BaseModel):

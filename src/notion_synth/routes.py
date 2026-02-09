@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from notion_synth.db import Database, new_id
 from notion_synth.fixtures import export_fixture as export_fixture_payload
@@ -26,6 +26,7 @@ from notion_synth.models import (
     UserCreate,
     Workspace,
     WorkspaceCreate,
+    WorkspaceDeletePreview,
 )
 from notion_synth.models import Database as DatabaseModel
 
@@ -309,7 +310,17 @@ def get_workspace(workspace_id: str, request: Request) -> Workspace:
     return Workspace(**dict(row))
 
 
-@router.delete("/workspaces/{workspace_id}", status_code=204)
+@router.delete(
+    "/workspaces/{workspace_id}",
+    status_code=204,
+    responses={
+        200: {"model": WorkspaceDeletePreview, "description": "Dry-run deletion preview."},
+        204: {"description": "Workspace deleted."},
+        400: {"description": "Invalid request / demo workspace delete requires force=true."},
+        404: {"description": "Workspace not found."},
+        409: {"description": "Cascade required; dependent objects exist."},
+    },
+)
 def delete_workspace(
     workspace_id: str,
     request: Request,
@@ -321,13 +332,18 @@ def delete_workspace(
         False,
         description="When true, allow deleting the seeded demo workspace (ws_demo).",
     ),
+    dry_run: bool = Query(
+        False,
+        description="When true, do not delete; return dependency counts and whether cascade/force is required.",
+    ),
 ) -> Response:
     db = _get_db(request)
     row = db.query_one("SELECT id FROM workspaces WHERE id = ?", [workspace_id])
     if row is None:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    if workspace_id == "ws_demo" and not force:
+    requires_force = workspace_id == "ws_demo"
+    if requires_force and not force and not dry_run:
         raise HTTPException(
             status_code=400,
             detail="Refusing to delete demo workspace without force=true",
@@ -366,7 +382,19 @@ def delete_workspace(
         [workspace_id, workspace_id],
     )
 
-    if not cascade and any(value > 0 for value in counts.values()):
+    requires_cascade = any(value > 0 for value in counts.values())
+    can_delete = (not requires_force or force) and (not requires_cascade or cascade)
+    if dry_run:
+        preview = WorkspaceDeletePreview(
+            workspace_id=workspace_id,
+            requires_force=requires_force,
+            requires_cascade=requires_cascade,
+            can_delete=can_delete,
+            counts=counts,
+        )
+        return JSONResponse(status_code=200, content=preview.model_dump())
+
+    if not cascade and requires_cascade:
         raise HTTPException(
             status_code=409,
             detail={
