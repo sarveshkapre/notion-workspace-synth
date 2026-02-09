@@ -42,6 +42,6 @@ WHERE database_id = 'db_tasks';
 - Docs: `GET /docs`
 
 ## Next 3 improvements
-1. Add Docker Compose for local demos (API + persisted SQLite volume).
-2. Add fixture “packs” (engineering/org presets) to improve realism without external dependencies.
-3. Add synthetic file attachments metadata (minimal shape, no blob hosting).
+1. Add fixture “packs” (engineering/org presets) to improve realism without external dependencies.
+2. Add synthetic file attachments metadata (minimal shape, no blob hosting).
+3. Add ingest API for external fixtures (validate + merge policies).

@@ -64,6 +64,39 @@ curl -X DELETE http://localhost:8000/comments/comment_1
 curl -X DELETE http://localhost:8000/users/user_alex
 ```
 
+## List filters + paging patterns
+Show total counts via response header:
+```bash
+curl -i "http://localhost:8000/pages?workspace_id=ws_demo&include_total=true"
+# -> X-Total-Count: 2
+```
+
+Page filters:
+```bash
+curl "http://localhost:8000/pages?title_contains=Welcome"
+curl "http://localhost:8000/pages?parent_type=workspace&parent_id=ws_demo"
+```
+
+Paging metadata via headers:
+```bash
+curl -i "http://localhost:8000/pages?limit=1&offset=0&include_pagination=true"
+# -> X-Has-More: true
+# -> X-Next-Offset: 1
+# -> Link: <...offset=1>; rel=\"next\"
+```
+
+Database row filtering:
+```bash
+# Substring match within a specific property:
+curl "http://localhost:8000/databases/db_tasks/rows?property_name=Status&property_value_contains=Progress"
+
+# Exact match within a specific property:
+curl "http://localhost:8000/databases/db_tasks/rows?property_name=Status&property_value_equals=Done"
+
+# Multi-property AND (repeatable):
+curl "http://localhost:8000/databases/db_tasks/rows?property_equals=Status:Done&property_equals=Priority:High"
+```
+
 ## CLI (Enterprise Synth)
 Generate a full engineering workspace with multiple users, pages, and databases:
 ```bash
@@ -133,11 +166,6 @@ notion-synth notion activity blueprint.enriched.json --token "$NOTION_TOKEN" --t
 ```
 
 More details: `docs/NOTION.md`, `docs/ENTRA.md`, `docs/LLM.md`
-
-Totals via response header:
-```bash
-curl -i "http://localhost:8000/pages?include_total=true"
-```
 
 Fixtures (export/import):
 ```bash
