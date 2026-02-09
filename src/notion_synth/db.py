@@ -127,6 +127,26 @@ def _init_schema(db: Database) -> None:
         """
     )
 
+    # Lightweight indexes for common list/filter paths. Safe to run on every start.
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_users_workspace_created ON users (workspace_id, created_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pages_workspace_created ON pages (workspace_id, created_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_databases_workspace_created ON databases (workspace_id, created_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rows_database_created ON database_rows (database_id, created_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_comments_page_created ON comments (page_id, created_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_comments_author_created ON comments (author_id, created_at)"
+    )
+
 
 def _seed_if_empty(db: Database) -> None:
     row = db.query_one("SELECT COUNT(*) as count FROM workspaces")
