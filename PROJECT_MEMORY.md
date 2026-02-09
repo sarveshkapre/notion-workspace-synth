@@ -19,6 +19,14 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Trust: `local`
 - Confidence: `high`
 
+### 2026-02-09: Add best-effort page search via `/search/pages`
+- Decision: add `GET /search/pages?q=...` and back it with SQLite FTS5 when available; fall back to `LIKE` scans if FTS5 is not compiled in.
+- Why: “search everywhere” is a baseline Notion workflow, and it makes the synthetic API substantially more usable for demos and integration tests.
+- Evidence: `src/notion_synth/db.py` (FTS setup), `src/notion_synth/routes.py` (`GET /search/pages`), `tests/test_api.py::test_search_pages`, smoke curl.
+- Commit: `2ab2d2f`
+- Trust: `local`
+- Confidence: `medium` (FTS availability varies by SQLite build; fallback path covered by tests).
+
 ### 2026-02-09: Guarded workspace deletion semantics
 - Decision: `DELETE /workspaces/{workspace_id}` requires `cascade=true` when dependent objects exist; seeded demo workspace `ws_demo` additionally requires `force=true`.
 - Why: avoid accidental data loss while still enabling deterministic cleanup for demos/tests.
@@ -79,12 +87,18 @@ This file is intentionally lightweight and append-only. It captures decisions an
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
 - `make check` (pass) on 2026-02-09 (pagination headers).
+- `make check` (pass) on 2026-02-09 (page search).
 - `make security` (pass) on 2026-02-09.
+- `make security` (pass) on 2026-02-09 (page search bandit annotation).
 - Smoke (pass) on 2026-02-09:
   - `TMP_BASE=$(mktemp /tmp/notion_synth.XXXXXX) && TMP_DB="$TMP_BASE.db" && mv "$TMP_BASE" "$TMP_DB" && NOTION_SYNTH_DB=$TMP_DB .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8001`
   - `curl -sS http://127.0.0.1:8001/health`
   - `curl -sS http://127.0.0.1:8001/stats`
   - `curl -sS -X DELETE "http://127.0.0.1:8001/workspaces/ws_demo?dry_run=true"`
+- Smoke (pass) on 2026-02-09:
+  - `NOTION_SYNTH_DB=$(mktemp /tmp/notion_synth.XXXXXX).db .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8012`
+  - `curl -sS "http://127.0.0.1:8012/search/pages?q=Welcome"`
+  - `curl -sS -D - "http://127.0.0.1:8012/pages?limit=1&include_pagination=true" -o /dev/null`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21812172624 --exit-status`
 

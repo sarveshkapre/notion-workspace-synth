@@ -60,11 +60,13 @@
 - CI on `main` is green as of 2026-02-08/2026-02-09; the earlier failures in early February are now addressed by shipped fixes and regression tests.
 - CI secret scans can fail with shallow clones because gitleaks scans commit ranges on push; use `fetch-depth: 0` for reliable history-range scanning.
 - Market scan (bounded): mock API tools in this segment emphasize OpenAPI-first ergonomics, rule-based matching, dynamic templating, proxying, and opt-in failure simulation (examples: https://mockoon.com/docs/latest/ and https://mockoon.com/mock-samples/notion-api/).
+- Market scan (bounded): WireMock highlights explicit fault/latency injection as a first-class mocking feature (e.g. fixed delays, jitter distributions, chunked responses), reinforcing the value of an env-guarded `delay_ms`/`fail_rate` feature for demos/tests (https://wiremock.org/docs/simulating-faults/).
+- Market scan (bounded): Prism positions OpenAPI-driven dynamic mock responses plus request/response validation as baseline expectations for API-mocking workflows (https://stoplight.io/open-source/prism).
 - Market scan (bounded): Notion’s public API documents a request limit of 3 requests per second per integration (https://developers.notion.com/reference/request-limits).
 - Gap map:
-  Missing: fault injection and page search; pagination metadata.
+  Missing: fault injection; fixture packs; admin reset endpoint for deterministic demos.
   Weak (now improved): deletion safety previews and OpenAPI examples for common write payloads.
-  Parity: fixtures import/export, seeded demo data, basic list filtering.
+  Parity (now improved): fixtures import/export, seeded demo data, basic list filtering, pagination metadata, page search.
   Differentiator: deterministic enterprise dataset generator + Entra/Notion apply workflows.
 
 ## Notes
