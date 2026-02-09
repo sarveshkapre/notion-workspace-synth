@@ -1,7 +1,8 @@
 # CHANGELOG
 
 ## [Unreleased]
-- (none)
+- Add pagination metadata headers on list endpoints via `include_pagination=true` (includes `Link: <...>; rel="next"`).
+- Add `GET /search/pages?q=...` page search endpoint with best-effort SQLite FTS5 backing (fallback to `LIKE` scans).
 
 ## [0.2.0] - 2026-02-09
 - Fix CI/tooling reliability by allowing `make` targets to fall back to environment Python when `.venv` is absent.
