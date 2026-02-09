@@ -76,3 +76,12 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `curl -sS http://127.0.0.1:8001/health`
   - `curl -sS http://127.0.0.1:8001/stats`
   - `curl -sS -X DELETE "http://127.0.0.1:8001/workspaces/ws_demo?dry_run=true"`
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21812172624 --exit-status`
+
+## Mistakes And Fixes
+- 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.
+  - Root cause: gitleaks scans a git commit range on push; with depth=1 the base commit is missing and `git log` fails.
+  - Prevention rule: run history-range scanners (gitleaks, release tooling) only with full history in CI.
+  - Evidence: GitHub Actions failure `21812114129`, fix commit `120f3a2`.
+  - Trust: `external` (failure), `local` (workflow change)

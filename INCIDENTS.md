@@ -14,3 +14,13 @@ This file records real failures/regressions and the prevention rules adopted aft
 - Evidence: `Makefile`, `tests/test_makefile.py`.
 - Trust: `local` (fix + tests), `external` (initial failures in GitHub Actions history)
 
+## 2026-02-09: CI failed in gitleaks due to shallow checkout
+- Impact: CI runs failed at secret scan, blocking mainline confidence despite passing lint/tests/security locally.
+- Detection: GitHub Actions run `21812114129` failed on 2026-02-09.
+- Root cause: `actions/checkout` default `fetch-depth: 1` produced a shallow clone; gitleaks tried to scan a commit range (`<base>^..<head>`) and `git log` failed because the base commit was not present.
+- Fix: Set `actions/checkout@v4` `fetch-depth: 0` so gitleaks can scan the push commit range reliably.
+- Prevention rules:
+  - Any history-range scanner (gitleaks, semantic-release, changelog tools) must run with `fetch-depth: 0` in CI.
+  - Treat “tool fails due to checkout depth” as a CI configuration bug; fix workflow rather than weakening the scan.
+- Evidence: `.github/workflows/ci.yml`.
+- Trust: `local` (workflow change), `external` (CI failure + recovery)

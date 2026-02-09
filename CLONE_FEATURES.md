@@ -17,6 +17,8 @@
 ## Implemented
 - [x] 2026-02-09: Tracked repo-root `AGENTS.md` autonomous engineering contract and refreshed the task backlog for cycle 1.
   Evidence: `AGENTS.md`, `CLONE_FEATURES.md`.
+- [x] 2026-02-09: Fixed CI secret scan reliability by fetching full git history for gitleaks (`actions/checkout` `fetch-depth: 0`).
+  Evidence: `.github/workflows/ci.yml`.
 - [x] 2026-02-09: Added `dry_run=true` preview for `DELETE /workspaces/{workspace_id}` returning dependency counts and required flags without mutation.
   Evidence: `src/notion_synth/routes.py` (`DELETE /workspaces/{workspace_id}`), `src/notion_synth/models.py::WorkspaceDeletePreview`, `tests/test_api.py::test_delete_demo_workspace_requires_force`.
 - [x] 2026-02-09: Added OpenAPI request examples for common write payloads (workspaces/users/pages/databases/rows/comments).
@@ -51,6 +53,7 @@
 - The repo had latent lint/type/security drift that was not visible until CI bootstrap was fixed; keeping the fallback path tested avoids similar blind spots.
 - Provider-heavy CLI dispatch benefits from strict branch-local variable naming; shared names across command branches caused most mypy false conflicts.
 - CI on `main` is green as of 2026-02-08/2026-02-09; the earlier failures in early February are now addressed by shipped fixes and regression tests.
+- CI secret scans can fail with shallow clones because gitleaks scans commit ranges on push; use `fetch-depth: 0` for reliable history-range scanning.
 - Market scan (bounded): mock API tools in this segment emphasize OpenAPI-first ergonomics, rule-based matching, dynamic templating, proxying, and opt-in failure simulation (examples: https://mockoon.com/docs/latest/ and https://mockoon.com/mock-samples/notion-api/).
 - Market scan (bounded): Notion’s public API documents a request limit of 3 requests per second per integration (https://developers.notion.com/reference/request-limits).
 - Gap map:
