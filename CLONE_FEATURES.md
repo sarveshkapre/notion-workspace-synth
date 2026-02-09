@@ -7,11 +7,14 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P1: Add `DELETE /workspaces/{workspace_id}` with explicit cascade semantics and audit-safe guardrails.
-- [ ] P1: Extend row querying with exact-match operators (`property_equals`) and multi-property filters.
-- [ ] P1: Add focused mocked integration tests for Notion/Graph provider clients in CLI flows.
-- [ ] P2: Add performance guidance and optional indexes for frequently filtered JSON row properties.
-- [ ] P2: Prepare release checklist automation (`make release-check`) to gate changelog/version/tag consistency.
+- [ ] P1: Add `DELETE /workspaces/{workspace_id}` with explicit cascade semantics + audit-safe guardrails (block `ws_demo` unless forced) and API tests.
+- [ ] P1: Extend row querying with exact-match operators (`property_equals`) + multi-property AND filters, keeping backward compatibility with `property_name`/`property_value_contains`.
+- [ ] P1: Add focused mocked provider tests for Notion + Graph clients (retry behavior, headers, 204 handling) and one CLI-level smoke test harness.
+- [ ] P2: Add DB indexes for common list/filter paths (workspace_id, created_at, foreign keys) and document optional expression indexes for JSON row properties.
+- [ ] P2: Add release checklist automation (`make release-check`) to gate changelog/version/release-doc consistency.
+- [ ] P2: Create `PROJECT_MEMORY.md` and `INCIDENTS.md` templates and start recording production signals, decisions, and mitigations per autonomous loop.
+- [ ] P3: Add OpenAPI examples to key endpoints (create page/database/row) for better demo ergonomics.
+- [ ] P3: Add a lightweight concurrency note (SQLite WAL + single-writer expectations) and a `make dev-wal` helper for local demos.
 
 ## Implemented
 - [x] 2026-02-08: Fixed CI bootstrap failure by making `Makefile` targets fall back to environment Python when `.venv` is absent.
