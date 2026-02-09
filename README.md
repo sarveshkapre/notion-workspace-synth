@@ -150,6 +150,8 @@ curl -X DELETE http://localhost:8000/users/user_alex
 
 ## Configuration
 - `NOTION_SYNTH_DB` (optional): path to SQLite DB file. Default: `./notion_synth.db`
+- `NOTION_SYNTH_SQLITE_WAL` (optional): set to `1` to enable SQLite WAL mode (better concurrent readers; still single-writer).
+- `NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS` (optional): SQLite `busy_timeout` in ms (default: `5000`).
 
 ## Docker
 ```bash

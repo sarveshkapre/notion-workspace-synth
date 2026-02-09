@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -43,6 +44,17 @@ def connect(db_path: str | None = None) -> Database:
     path = db_path or os.getenv("NOTION_SYNTH_DB") or DEFAULT_DB_PATH
     use_uri = path.startswith("file:")
     connection = sqlite3.connect(path, check_same_thread=False, uri=use_uri)
+    # Reduce "database is locked" flakiness for local demo workloads.
+    busy_timeout_ms = int(os.getenv("NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS", "5000"))
+    if busy_timeout_ms > 0:
+        connection.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+
+    # WAL improves concurrent reader behavior (still effectively single-writer).
+    use_wal = os.getenv("NOTION_SYNTH_SQLITE_WAL", "").strip().lower() in {"1", "true", "yes", "on"}
+    is_memory = path == ":memory:" or ("mode=memory" in path)
+    if use_wal and not is_memory:
+        with suppress(sqlite3.OperationalError):
+            connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA foreign_keys=ON")
     connection.row_factory = sqlite3.Row
     db = Database(path=path, connection=connection)

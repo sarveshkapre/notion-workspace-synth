@@ -5,7 +5,7 @@ VENV_PY := $(VENV)/bin/python
 PIP := $(if $(wildcard $(VENV_PIP)),$(VENV_PIP),$(PYTHON) -m pip)
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(PYTHON))
 
-.PHONY: setup dev test lint typecheck build check security release
+.PHONY: setup dev dev-wal test lint typecheck build check security release
 .PHONY: release-check
 
 setup:
@@ -15,6 +15,9 @@ setup:
 
 dev:
 	$(PY) -m uvicorn notion_synth.main:app --reload --host 0.0.0.0 --port 8000
+
+dev-wal:
+	NOTION_SYNTH_SQLITE_WAL=1 $(PY) -m uvicorn notion_synth.main:app --reload --host 0.0.0.0 --port 8000
 
 test:
 	$(PY) -m pytest

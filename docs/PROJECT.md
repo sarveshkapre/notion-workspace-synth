@@ -13,6 +13,12 @@
 ## Environment
 - Python 3.11+
 - Optional: `NOTION_SYNTH_DB=./notion_synth.db`
+- Optional: `NOTION_SYNTH_SQLITE_WAL=1` (enables WAL; better concurrent readers, still single-writer)
+- Optional: `NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS=5000` (default; reduces transient lock errors)
+
+## Concurrency notes
+- This is intended for local/dev usage; SQLite is effectively single-writer.
+- Use WAL (`make dev-wal`) when you have multiple concurrent readers (demo UIs + background scripts).
 
 ## Performance notes
 - The DB initializes a few small indexes for common `workspace_id` and FK list paths on startup.
