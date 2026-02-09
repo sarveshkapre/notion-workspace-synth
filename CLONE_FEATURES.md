@@ -7,9 +7,16 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P3: Add OpenAPI examples to key endpoints (create page/database/row) for better demo ergonomics.
-- [ ] P3: Add a lightweight concurrency note (SQLite WAL + single-writer expectations) and a `make dev-wal` helper for local demos.
-- [ ] P3: Consider `dry_run=true` for `DELETE /workspaces/{workspace_id}` to return dependency counts without mutation (safer demo UX).
+- [ ] P1 (Selected - this run): Add `dry_run=true` for `DELETE /workspaces/{workspace_id}` to return dependency counts without mutation (safer demo UX).
+- [ ] P1 (Selected - this run): Add OpenAPI examples to key endpoints (create page/database/row/user/workspace) for better demo ergonomics.
+- [ ] P2 (Selected - this run): Add SQLite concurrency ergonomics: default `busy_timeout`, opt-in WAL via env var, and a `make dev-wal` helper; document expected single-writer behavior.
+- [ ] P2: Ensure repo-root `AGENTS.md` (autonomous engineering contract) is tracked and kept current; avoid divergence from `docs/AGENTS.md`.
+- [ ] P2: Improve list endpoint pagination UX: add `Link` header or `next_offset` metadata for faster client iteration.
+- [ ] P3: Add optional fault injection for demos/tests (`?delay_ms=` and/or `?fail_rate=`) with strict opt-in.
+- [ ] P3: Add SQLite FTS-backed search for pages (`/search/pages?q=`) to match common Notion “search everywhere” workflows.
+- [ ] P3: Add fixture “packs” (engineering/org presets) to improve realism without external dependencies.
+- [ ] P3: Add a guarded reset endpoint to restore seeded demo data (`POST /admin/reset`) for deterministic demos.
+- [ ] P3: Add Docker Compose for local demos (db volume + API) and document “safe demo” deployment guidance.
 
 ## Implemented
 - [x] 2026-02-09: Added guarded workspace deletion endpoint with explicit cascade semantics and demo-workspace protection.
