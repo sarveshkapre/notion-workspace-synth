@@ -5,6 +5,8 @@
 - Add `GET /search/pages?q=...` page search endpoint with best-effort SQLite FTS5 backing (fallback to `LIKE` scans).
 - Add env-guarded admin reset endpoint (`POST /admin/reset?confirm=true`) to wipe and restore seeded demo data for deterministic demos.
 - Add opt-in fault injection middleware for demos/tests (`NOTION_SYNTH_FAULT_INJECTION=1` + `delay_ms` / `fail_rate` / `fail_status` query params).
+- Add fixture packs: `GET /packs` plus admin-gated `POST /admin/apply-pack` to generate + replace the local DB with a realistic preset dataset.
+- Add `X-Request-Id` response header for easier debugging, plus opt-in structured error responses (via `Accept: application/vnd.notion-synth.error+json`).
 
 ## [0.2.0] - 2026-02-09
 - Fix CI/tooling reliability by allowing `make` targets to fall back to environment Python when `.venv` is absent.

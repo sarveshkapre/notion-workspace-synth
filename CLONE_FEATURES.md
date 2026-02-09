@@ -7,12 +7,20 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P2: Fixture “packs” (engineering/org presets) to improve realism without external dependencies.
-- [ ] P3: Add synthetic file attachments metadata (minimal shape, no blob hosting).
-- [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy).
-- [ ] P3: Add API response shape for structured errors (stable `code` + `message`) without breaking existing clients.
+- [ ] P1: Expand synthetic data beyond engineering by adding at least 2 new generator profiles (e.g. sales/CS, marketing) and document the intent of each.
+- [ ] P1: Add CLI convenience commands around packs/profiles (e.g. `notion-synth packs list` + `notion-synth packs apply --db ...`) to reduce “many flags” friction.
+- [ ] P2: Fixture “packs” v2: allow “scale” presets (small/medium/large) and support overrides (`--company`, `--seed`) while remaining deterministic.
+- [ ] P2: Add synthetic file attachments metadata (minimal shape, no blob hosting) to pages/comments to better match downstream client expectations.
+- [ ] P2: Add minimal Docker Compose healthcheck for the API container and document expected startup/seed behavior.
+- [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy) with a strict “reject unknown fields” mode.
+- [ ] P3: Add richer search (optional) beyond pages: database rows and comments, with best-effort FTS fallback behavior.
+- [ ] P3: Add a small “demo script” smoke path in `scripts/` that starts the server, applies a pack, and hits 3-5 core endpoints end-to-end.
 
 ## Implemented
+- [x] 2026-02-09: Add fixture packs: `GET /packs` plus admin-gated `POST /admin/apply-pack` (supports `dry_run=true` and `confirm=true`) to generate + replace the local DB with a realistic preset dataset.
+  Evidence: `src/notion_synth/packs.py`, `src/notion_synth/routes.py`, `tests/test_packs.py`, smoke curl.
+- [x] 2026-02-09: Add `X-Request-Id` header on all responses, plus opt-in structured error responses (via `Accept: application/vnd.notion-synth.error+json` or `?error_format=structured`) without breaking default FastAPI error shapes.
+  Evidence: `src/notion_synth/errors.py`, `src/notion_synth/main.py`, `tests/test_errors.py`, smoke curl.
 - [x] 2026-02-09: Add Docker Compose for local demos (API + persisted SQLite volume) and document “safe demo” guidance (localhost binding by default).
   Evidence: `docker-compose.yml`, `README.md`, `docs/SECURITY.md`, `make check`.
 - [x] 2026-02-09: Add optional CORS support for local browser demo UIs (env-configured origins; default off) and expose paging metadata headers for frontend clients.

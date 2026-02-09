@@ -124,6 +124,22 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Trust: `local`
 - Confidence: `high`
 
+### 2026-02-09: Add fixture packs you can apply without restarting the server
+- Decision: add `GET /packs` plus admin-gated `POST /admin/apply-pack` (supports `dry_run=true` and `confirm=true`) to generate + replace the local DB with a realistic preset dataset.
+- Why: “reset to a known realistic dataset” is a baseline expectation for mock/demo servers; packs reduce “many flags” friction and make demos reproducible.
+- Evidence: `src/notion_synth/packs.py`, `src/notion_synth/routes.py`, `tests/test_packs.py`, `README.md`.
+- Commit: `e84c93b`
+- Trust: `local`
+- Confidence: `high`
+
+### 2026-02-09: Add X-Request-Id header and opt-in structured errors
+- Decision: add `X-Request-Id` response header for all requests; add opt-in structured error payloads via `Accept: application/vnd.notion-synth.error+json` (or `?error_format=structured`) while keeping default FastAPI error shapes unchanged.
+- Why: request tracing is a common expectation for production-grade APIs; opt-in structured errors improve DX without breaking existing clients/tests that assume `{"detail": ...}`.
+- Evidence: `src/notion_synth/errors.py`, `src/notion_synth/main.py`, `tests/test_errors.py`, `README.md`.
+- Commit: `de00d49`
+- Trust: `local`
+- Confidence: `high`
+
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
 - `make check` (pass) on 2026-02-09 (pagination headers).
@@ -173,6 +189,19 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `TMP_DB=$(mktemp /tmp/notion_synth.XXXXXX).db NOTION_SYNTH_DB=$TMP_DB NOTION_SYNTH_CORS_ORIGINS=http://localhost:5173 .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8021`
   - `curl -sS -D - -o /dev/null -H 'Origin: http://localhost:5173' 'http://127.0.0.1:8021/pages?limit=1&include_pagination=true' | rg -i '^(access-control-allow-origin|access-control-expose-headers|x-has-more|x-next-offset|link):'`
   - `curl -sS http://127.0.0.1:8021/health` -> `{"status":"ok"}`
+- `make check` (pass) on 2026-02-09 (packs + request id + structured errors).
+- `make security` (pass) on 2026-02-09 (packs + request id + structured errors).
+- Smoke (pass) on 2026-02-09 (packs + structured errors):
+  - `PORT=8034 TMP_DB=$(mktemp /tmp/notion_synth.XXXXXX).db NOTION_SYNTH_DB=$TMP_DB NOTION_SYNTH_ADMIN=1 .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port $PORT`
+  - `curl -fsS http://127.0.0.1:$PORT/packs`
+  - `curl -fsS -X POST "http://127.0.0.1:$PORT/admin/apply-pack?name=engineering_small&dry_run=true"`
+  - `curl -fsS -X POST "http://127.0.0.1:$PORT/admin/apply-pack?name=engineering_small&confirm=true"`
+  - `curl -sS -H "Accept: application/vnd.notion-synth.error+json" "http://127.0.0.1:$PORT/workspaces/ws_nope"`
+  - `curl -fsS -D - -o /dev/null "http://127.0.0.1:$PORT/health" | rg -i "^x-request-id:"`
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21842360214 --exit-status` (commit `e84c93b`)
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21842373742 --exit-status` (commit `de00d49`)
 - Docker Compose verification (fail) on 2026-02-09:
   - `docker compose config -q` -> `command not found: docker` (Docker not available in this environment)
 

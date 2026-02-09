@@ -198,6 +198,23 @@ curl -sS -X POST "http://localhost:8000/admin/reset?dry_run=true"
 curl -sS -X POST "http://localhost:8000/admin/reset?confirm=true"
 ```
 
+Fixture packs (generate + replace DB with a realistic preset dataset):
+```bash
+# List available packs (public)
+curl -sS http://localhost:8000/packs
+
+# Apply a pack (admin-gated; supports dry_run preview)
+NOTION_SYNTH_ADMIN=1 make dev
+curl -sS -X POST "http://localhost:8000/admin/apply-pack?name=engineering_small&dry_run=true"
+curl -sS -X POST "http://localhost:8000/admin/apply-pack?name=engineering_small&confirm=true"
+```
+
+Structured errors (opt-in):
+```bash
+curl -sS -H "Accept: application/vnd.notion-synth.error+json" http://localhost:8000/workspaces/ws_nope
+# -> {"error":{"code":"not_found","message":"Workspace not found","details":null,"request_id":"..."}}
+```
+
 Fault injection (opt-in):
 ```bash
 NOTION_SYNTH_FAULT_INJECTION=1 make dev
