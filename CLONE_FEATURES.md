@@ -7,15 +7,18 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P1 (cycle-4): Add Docker Compose for local demos (API + persisted SQLite volume) and document “safe demo” deployment guidance.
-- [ ] P1 (cycle-4): Add optional CORS support for local UIs (env-configured allowed origins; default off).
-- [ ] P2 (cycle-4): Add request/response examples in docs for common list filters + paging patterns (include `include_total`, `include_pagination`, row filter operators).
 - [ ] P2: Fixture “packs” (engineering/org presets) to improve realism without external dependencies.
 - [ ] P3: Add synthetic file attachments metadata (minimal shape, no blob hosting).
 - [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy).
 - [ ] P3: Add API response shape for structured errors (stable `code` + `message`) without breaking existing clients.
 
 ## Implemented
+- [x] 2026-02-09: Add Docker Compose for local demos (API + persisted SQLite volume) and document “safe demo” guidance (localhost binding by default).
+  Evidence: `docker-compose.yml`, `README.md`, `docs/SECURITY.md`, `make check`.
+- [x] 2026-02-09: Add optional CORS support for local browser demo UIs (env-configured origins; default off) and expose paging metadata headers for frontend clients.
+  Evidence: `src/notion_synth/main.py`, `tests/test_cors.py`, `README.md`, `docs/PROJECT.md`, `make check`.
+- [x] 2026-02-09: Add request/response examples in docs for list filters + paging patterns (`include_total`, `include_pagination`, row filter operators).
+  Evidence: `README.md`, `docs/ROADMAP.md`.
 - [x] 2026-02-09: Added env-guarded admin reset endpoint (`POST /admin/reset?confirm=true`) to wipe the DB and restore seeded demo data for deterministic demos.
   Evidence: `src/notion_synth/routes.py` (`POST /admin/reset`), `src/notion_synth/db.py::seed_demo(force=True)`, `tests/test_api.py::test_admin_reset_confirm_wipes_and_reseeds`, `README.md`.
 - [x] 2026-02-09: Added opt-in fault injection middleware for demos/tests (`NOTION_SYNTH_FAULT_INJECTION=1` + `delay_ms` / `fail_rate` / `fail_status` query params).
@@ -66,11 +69,13 @@
 - Market scan (bounded): mock API tools in this segment emphasize OpenAPI-first ergonomics, rule-based matching, dynamic templating, proxying, and opt-in failure simulation (examples: https://mockoon.com/docs/latest/ and https://mockoon.com/mock-samples/notion-api/).
 - Market scan (bounded): WireMock highlights explicit fault/latency injection as a first-class mocking feature (e.g. fixed delays, jitter distributions, chunked responses), reinforcing the value of an env-guarded `delay_ms`/`fail_rate` feature for demos/tests (https://wiremock.org/docs/simulating-faults/).
 - Market scan (bounded): Prism positions OpenAPI-driven dynamic mock responses plus request/response validation as baseline expectations for API-mocking workflows (https://stoplight.io/open-source/prism).
+- Market scan (bounded): Self-hosted mock tools commonly ship Docker images and document container networking gotchas (e.g., Prism notes `-h 0.0.0.0` is required for reachability from outside the container), reinforcing the value of “safe by default” localhost bindings in demo Compose stacks (https://hub.docker.com/r/stoplight/prism/).
+- Market scan (bounded): Mockoon’s CLI supports headless Docker runs as a baseline workflow, reinforcing “docker compose up” as a familiar on-ramp for API mocking/demo products (https://mockoon.com/cli/).
 - Market scan (bounded): Postman mock servers support simulated delay via `x-mock-response-delay` for response simulation/testing workflows (https://learning.postman.com/docs/designing-and-developing-your-api/mocking-data/mocking-with-examples/).
 - Market scan (bounded): Notion’s public API documents a request limit of 3 requests per second per integration (https://developers.notion.com/reference/request-limits).
 - Gap map:
-  Missing: fixture packs; Docker Compose demo setup; synthetic file attachments metadata; ingest API for external fixtures; structured error shape.
-  Weak (now improved): deletion safety previews and OpenAPI examples for common write payloads.
+  Missing: fixture packs; synthetic file attachments metadata; ingest API for external fixtures; structured error shape.
+  Weak (now improved): local demo ergonomics (Docker Compose, optional CORS), deletion safety previews, and OpenAPI examples for common write payloads.
   Parity (now improved): fixtures import/export, seeded demo data, basic list filtering, pagination metadata, page search, admin reset, fault injection.
   Differentiator: deterministic enterprise dataset generator + Entra/Notion apply workflows.
 

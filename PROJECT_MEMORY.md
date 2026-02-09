@@ -100,6 +100,30 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Trust: `local`
 - Confidence: `medium`
 
+### 2026-02-09: Add Docker Compose demo stack with persisted SQLite volume
+- Decision: ship `docker-compose.yml` for local demos with a named volume for SQLite persistence and a localhost-only port binding by default.
+- Why: “docker compose up” is a common baseline workflow for mock/demo servers; persistence + safe binding reduces demo friction and accidental exposure risk.
+- Evidence: `docker-compose.yml`, `README.md`, `docs/SECURITY.md`.
+- Commit: `af7f5b8`
+- Trust: `local`
+- Confidence: `high`
+
+### 2026-02-09: Add optional CORS for browser demo clients
+- Decision: add opt-in CORS middleware via `NOTION_SYNTH_CORS_ORIGINS` and expose paging metadata headers to browser clients.
+- Why: local UIs running on a separate origin need CORS, and paging/count headers are otherwise unreadable to frontend code.
+- Evidence: `src/notion_synth/main.py`, `tests/test_cors.py`, `README.md`, `docs/PROJECT.md`.
+- Commit: `d96dd6d`
+- Trust: `local`
+- Confidence: `high`
+
+### 2026-02-09: Document list filters + paging patterns in README
+- Decision: add concrete curl examples for `include_total`, `include_pagination`, and row filter operators (`property_value_contains`, `property_value_equals`, repeatable `property_equals`).
+- Why: improves time-to-first-demo and reduces reliance on reading OpenAPI schemas for common list/query flows.
+- Evidence: `README.md`.
+- Commit: `e2f616e`
+- Trust: `local`
+- Confidence: `high`
+
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
 - `make check` (pass) on 2026-02-09 (pagination headers).
@@ -136,6 +160,13 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21825081080 --exit-status`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21825198642 --exit-status`
+- `make check` (pass) on 2026-02-09 (Docker Compose docs + CORS + README examples).
+- Smoke (pass) on 2026-02-09 (CORS + paging headers):
+  - `TMP_DB=$(mktemp /tmp/notion_synth.XXXXXX).db NOTION_SYNTH_DB=$TMP_DB NOTION_SYNTH_CORS_ORIGINS=http://localhost:5173 .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8021`
+  - `curl -sS -D - -o /dev/null -H 'Origin: http://localhost:5173' 'http://127.0.0.1:8021/pages?limit=1&include_pagination=true' | rg -i '^(access-control-allow-origin|access-control-expose-headers|x-has-more|x-next-offset|link):'`
+  - `curl -sS http://127.0.0.1:8021/health` -> `{"status":"ok"}`
+- Docker Compose verification (fail) on 2026-02-09:
+  - `docker compose config -q` -> `command not found: docker` (Docker not available in this environment)
 
 ## Mistakes And Fixes
 - 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.
