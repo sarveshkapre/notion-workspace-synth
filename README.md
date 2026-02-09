@@ -158,6 +158,8 @@ curl -X DELETE http://localhost:8000/users/user_alex
 - `NOTION_SYNTH_DB` (optional): path to SQLite DB file. Default: `./notion_synth.db`
 - `NOTION_SYNTH_SQLITE_WAL` (optional): set to `1` to enable SQLite WAL mode (better concurrent readers; still single-writer).
 - `NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS` (optional): SQLite `busy_timeout` in ms (default: `5000`).
+- `NOTION_SYNTH_CORS_ORIGINS` (optional): comma-separated allowed origins for browser demo UIs (e.g. `http://localhost:5173,http://localhost:3000`), or `*` for any origin.
+- `NOTION_SYNTH_CORS_ALLOW_CREDENTIALS` (optional): set to `1` to include `Access-Control-Allow-Credentials: true` when CORS is enabled (default: off).
 - `NOTION_SYNTH_ADMIN` (optional): set to `1` to enable admin endpoints (currently `POST /admin/reset`).
 - `NOTION_SYNTH_FAULT_INJECTION` (optional): set to `1` to enable demo fault injection query params (`delay_ms`, `fail_rate`, `fail_status`).
 

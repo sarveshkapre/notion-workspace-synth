@@ -16,6 +16,8 @@
 - Optional: `NOTION_SYNTH_DB=./notion_synth.db`
 - Optional: `NOTION_SYNTH_SQLITE_WAL=1` (enables WAL; better concurrent readers, still single-writer)
 - Optional: `NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS=5000` (default; reduces transient lock errors)
+- Optional: `NOTION_SYNTH_CORS_ORIGINS=http://localhost:5173,http://localhost:3000` (enables CORS for local browser demo UIs)
+- Optional: `NOTION_SYNTH_CORS_ALLOW_CREDENTIALS=1` (CORS only; default off)
 - Optional: `NOTION_SYNTH_ADMIN=1` (enables admin endpoints like `POST /admin/reset?confirm=true`)
 - Optional: `NOTION_SYNTH_FAULT_INJECTION=1` (enables opt-in demo fault injection via query params)
 
