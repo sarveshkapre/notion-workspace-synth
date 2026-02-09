@@ -204,6 +204,8 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21842373742 --exit-status` (commit `de00d49`)
 - CI (pass) on 2026-02-09:
   - `gh run watch 21842438832 --exit-status` (commit `31a1105`)
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21842492706 --exit-status` (commit `e37f1c2`)
 - Docker Compose verification (fail) on 2026-02-09:
   - `docker compose config -q` -> `command not found: docker` (Docker not available in this environment)
 
