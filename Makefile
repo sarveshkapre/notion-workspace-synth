@@ -6,6 +6,7 @@ PIP := $(if $(wildcard $(VENV_PIP)),$(VENV_PIP),$(PYTHON) -m pip)
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(PYTHON))
 
 .PHONY: setup dev test lint typecheck build check security release
+.PHONY: release-check
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -33,5 +34,8 @@ security:
 	$(PY) -m bandit -r src
 	$(PY) -m pip_audit
 
-release: check
+release-check:
+	$(PY) scripts/release_check.py
+
+release: release-check check
 	@echo "Cut a release by tagging and updating docs/RELEASE.md"

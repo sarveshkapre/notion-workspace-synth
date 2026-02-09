@@ -1,22 +1,23 @@
 # CHANGELOG
 
 ## [Unreleased]
+- (none)
+
+## [0.2.0] - 2026-02-09
 - Fix CI/tooling reliability by allowing `make` targets to fall back to environment Python when `.venv` is absent.
 - Add regression coverage for Makefile Python fallback (`tests/test_makefile.py`).
-- Add `DELETE /users/{user_id}` with authored-comment cascade semantics.
-- Add `GET /comments/{comment_id}` and `DELETE /comments/{comment_id}`.
-- Add row query filters on `GET /databases/{database_id}/rows` via `property_name` and `property_value_contains`.
-- Align FastAPI app version metadata with package version (`0.2.0`).
 - Stabilize lint/type/security gates across CLI/provider modules so `make check` and `make security` pass in CI.
-- Add landing page at `/` for quick navigation and curl snippets.
-- Add `GET /stats` for dataset counts and DB path.
+- Align FastAPI app version metadata with package version (`0.2.0`).
+- Add landing page at `/` for quick navigation and curl snippets, plus `GET /stats` for dataset counts and DB path.
 - Add list filtering and optional `X-Total-Count` header via `include_total=true`.
-- Add fixtures export/import endpoints (`/fixtures/export`, `/fixtures/import`).
-- Add `mode=merge` for fixture import (upsert without deleting existing data).
+- Add fixtures export/import endpoints (`/fixtures/export`, `/fixtures/import`) including `mode=merge`.
 - Add `POST /workspaces`, `POST /users`, and `GET /users/{user_id}` to create and retrieve user data.
-- Add page/database/row delete/update endpoints (and validate foreign keys on create to avoid 500s).
-- Add enterprise CLI for generating, seeding, exporting, and importing synthetic workspaces.
-- Add deterministic synthetic generator profile for engineering orgs.
+- Add update/delete endpoints for pages/databases/rows with FK validation on create.
+- Add comment lifecycle endpoints: `DELETE /users/{user_id}` cascades authored comments; `GET /comments/{comment_id}` + `DELETE /comments/{comment_id}`.
+- Add row filters on `GET /databases/{database_id}/rows`: contains-match plus exact-match (`property_value_equals`, repeatable `property_equals`).
+- Add `DELETE /workspaces/{workspace_id}` with cascade guardrails (demo workspace requires `force=true`).
+- Add SQLite indexes for common list/filter paths and document optional JSON expression indexing.
+- Add mocked provider tests for Notion + Graph clients and a CLI `generate` smoke test.
 
 ## [0.1.0] - 2026-02-01
 - Initial API with seeded demo workspace.
