@@ -7,10 +7,6 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P1 (Selected - this run): Add `dry_run=true` for `DELETE /workspaces/{workspace_id}` to return dependency counts without mutation (safer demo UX).
-- [ ] P1 (Selected - this run): Add OpenAPI examples to key endpoints (create page/database/row/user/workspace) for better demo ergonomics.
-- [ ] P2 (Selected - this run): Add SQLite concurrency ergonomics: default `busy_timeout`, opt-in WAL via env var, and a `make dev-wal` helper; document expected single-writer behavior.
-- [ ] P2: Ensure repo-root `AGENTS.md` (autonomous engineering contract) is tracked and kept current; avoid divergence from `docs/AGENTS.md`.
 - [ ] P2: Improve list endpoint pagination UX: add `Link` header or `next_offset` metadata for faster client iteration.
 - [ ] P3: Add optional fault injection for demos/tests (`?delay_ms=` and/or `?fail_rate=`) with strict opt-in.
 - [ ] P3: Add SQLite FTS-backed search for pages (`/search/pages?q=`) to match common Notion “search everywhere” workflows.
@@ -19,6 +15,14 @@
 - [ ] P3: Add Docker Compose for local demos (db volume + API) and document “safe demo” deployment guidance.
 
 ## Implemented
+- [x] 2026-02-09: Tracked repo-root `AGENTS.md` autonomous engineering contract and refreshed the task backlog for cycle 1.
+  Evidence: `AGENTS.md`, `CLONE_FEATURES.md`.
+- [x] 2026-02-09: Added `dry_run=true` preview for `DELETE /workspaces/{workspace_id}` returning dependency counts and required flags without mutation.
+  Evidence: `src/notion_synth/routes.py` (`DELETE /workspaces/{workspace_id}`), `src/notion_synth/models.py::WorkspaceDeletePreview`, `tests/test_api.py::test_delete_demo_workspace_requires_force`.
+- [x] 2026-02-09: Added OpenAPI request examples for common write payloads (workspaces/users/pages/databases/rows/comments).
+  Evidence: `src/notion_synth/models.py` (Pydantic `json_schema_extra` examples), `/docs` rendering.
+- [x] 2026-02-09: Added SQLite concurrency ergonomics: default `busy_timeout`, opt-in WAL via `NOTION_SYNTH_SQLITE_WAL=1`, plus `make dev-wal` helper; documented expected single-writer behavior.
+  Evidence: `src/notion_synth/db.py`, `Makefile` (`dev-wal`), `README.md`, `docs/PROJECT.md`.
 - [x] 2026-02-09: Added guarded workspace deletion endpoint with explicit cascade semantics and demo-workspace protection.
   Evidence: `src/notion_synth/routes.py` (`DELETE /workspaces/{workspace_id}`), `tests/test_api.py::test_delete_workspace_requires_cascade_and_cascades`.
 - [x] 2026-02-09: Extended row querying with exact-match operators (`property_value_equals`, repeatable `property_equals`) and multi-property AND filtering.
@@ -47,6 +51,13 @@
 - The repo had latent lint/type/security drift that was not visible until CI bootstrap was fixed; keeping the fallback path tested avoids similar blind spots.
 - Provider-heavy CLI dispatch benefits from strict branch-local variable naming; shared names across command branches caused most mypy false conflicts.
 - CI on `main` is green as of 2026-02-08/2026-02-09; the earlier failures in early February are now addressed by shipped fixes and regression tests.
+- Market scan (bounded): mock API tools in this segment emphasize OpenAPI-first ergonomics, rule-based matching, dynamic templating, proxying, and opt-in failure simulation (examples: https://mockoon.com/docs/latest/ and https://mockoon.com/mock-samples/notion-api/).
+- Market scan (bounded): Notion’s public API documents a request limit of 3 requests per second per integration (https://developers.notion.com/reference/request-limits).
+- Gap map:
+  Missing: fault injection and page search; pagination metadata.
+  Weak (now improved): deletion safety previews and OpenAPI examples for common write payloads.
+  Parity: fixtures import/export, seeded demo data, basic list filtering.
+  Differentiator: deterministic enterprise dataset generator + Entra/Notion apply workflows.
 
 ## Notes
 - This file is maintained by the autonomous clone loop.
