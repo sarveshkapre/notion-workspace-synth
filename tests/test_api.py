@@ -238,6 +238,48 @@ def test_search_pages() -> None:
     pages = response.json()
     assert [page["id"] for page in pages] == ["page_home"]
 
+
+def test_admin_reset_requires_env_guard(monkeypatch) -> None:
+    monkeypatch.delenv("NOTION_SYNTH_ADMIN", raising=False)
+    client = _client()
+    response = client.post("/admin/reset?confirm=true")
+    assert response.status_code == 404
+
+
+def test_admin_reset_dry_run_preview_does_not_mutate(monkeypatch) -> None:
+    monkeypatch.setenv("NOTION_SYNTH_ADMIN", "1")
+    client = TestClient(create_app(":memory:"))
+
+    created_ws = client.post("/workspaces", json={"name": "Acme"})
+    assert created_ws.status_code == 201
+    before = client.get("/stats").json()
+
+    preview = client.post("/admin/reset?dry_run=true")
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["status"] == "preview"
+    assert body["before"] == before
+    assert body["after"] == before
+    assert client.get("/stats").json() == before
+
+
+def test_admin_reset_confirm_wipes_and_reseeds(monkeypatch) -> None:
+    monkeypatch.setenv("NOTION_SYNTH_ADMIN", "1")
+    client = TestClient(create_app(":memory:"))
+
+    created_ws = client.post("/workspaces", json={"name": "Acme"})
+    assert created_ws.status_code == 201
+    assert client.get("/stats").json()["workspaces"] == 2
+
+    reset = client.post("/admin/reset?confirm=true")
+    assert reset.status_code == 200
+    body = reset.json()
+    assert body["status"] == "ok"
+    assert body["after"]["workspaces"] == 1
+    assert client.get("/workspaces/ws_demo").status_code == 200
+    assert [ws["id"] for ws in client.get("/workspaces").json()] == ["ws_demo"]
+
+
 def test_fixtures_export_import_roundtrip() -> None:
     client_a = TestClient(create_app(":memory:"))
     exported = client_a.get("/fixtures/export")

@@ -59,7 +59,7 @@ def connect(db_path: str | None = None) -> Database:
     connection.row_factory = sqlite3.Row
     db = Database(path=path, connection=connection)
     _init_schema(db)
-    _seed_if_empty(db)
+    seed_demo(db)
     return db
 
 
@@ -225,139 +225,167 @@ def _init_schema(db: Database) -> None:
         pass
 
 
-def _seed_if_empty(db: Database) -> None:
+def seed_demo(db: Database, *, force: bool = False) -> None:
+    """
+    Seed the deterministic demo org (ws_demo) into the DB.
+
+    - Default behavior: seed only when the DB is empty.
+    - When force=True: wipe all synthetic data first, then re-seed.
+    """
     row = db.query_one("SELECT COUNT(*) as count FROM workspaces")
-    if row and row["count"] > 0:
+    has_workspaces = bool(row and int(row["count"]) > 0)
+    if has_workspaces and not force:
         return
 
-    now = _utc_now()
-    workspace_id = "ws_demo"
-    db.execute(
-        "INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)",
-        [workspace_id, "Synth Demo Workspace", now],
-    )
+    conn = db.connection
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        if force:
+            cursor.execute("DELETE FROM comments")
+            cursor.execute("DELETE FROM database_rows")
+            cursor.execute("DELETE FROM databases")
+            cursor.execute("DELETE FROM pages")
+            cursor.execute("DELETE FROM users")
+            cursor.execute("DELETE FROM workspaces")
 
-    users = [
-        ("user_alex", workspace_id, "Alex Rivers", "alex@example.com", now),
-        ("user_bianca", workspace_id, "Bianca Holt", "bianca@example.com", now),
-        ("user_cheng", workspace_id, "Cheng Zhao", "cheng@example.com", now),
-    ]
-    db.connection.executemany(
-        "INSERT INTO users (id, workspace_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)",
-        users,
-    )
-
-    pages = [
-        (
-            "page_home",
-            workspace_id,
-            "Welcome to Synth",
-            json.dumps({"type": "doc", "blocks": ["Getting started", "Team goals"]}),
-            "workspace",
-            workspace_id,
-            now,
-            now,
-        ),
-        (
-            "page_project",
-            workspace_id,
-            "Project Tracker",
-            json.dumps({"type": "doc", "blocks": ["Milestones", "Risks", "Notes"]}),
-            "workspace",
-            workspace_id,
-            now,
-            now,
-        ),
-    ]
-    db.connection.executemany(
-        """
-        INSERT INTO pages (
-            id,
-            workspace_id,
-            title,
-            content,
-            parent_type,
-            parent_id,
-            created_at,
-            updated_at
+        now = _utc_now()
+        workspace_id = "ws_demo"
+        cursor.execute(
+            "INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)",
+            [workspace_id, "Synth Demo Workspace", now],
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        pages,
-    )
 
-    database_id = "db_tasks"
-    db.execute(
-        """
-        INSERT INTO databases (id, workspace_id, name, schema_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        [
-            database_id,
-            workspace_id,
-            "Task Board",
-            json.dumps(
-                {
-                    "properties": {
-                        "Task": {"type": "title"},
-                        "Owner": {"type": "person"},
-                        "Status": {"type": "select"},
-                        "Due": {"type": "date"},
+        users = [
+            ("user_alex", workspace_id, "Alex Rivers", "alex@example.com", now),
+            ("user_bianca", workspace_id, "Bianca Holt", "bianca@example.com", now),
+            ("user_cheng", workspace_id, "Cheng Zhao", "cheng@example.com", now),
+        ]
+        cursor.executemany(
+            "INSERT INTO users (id, workspace_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)",
+            users,
+        )
+
+        pages = [
+            (
+                "page_home",
+                workspace_id,
+                "Welcome to Synth",
+                json.dumps({"type": "doc", "blocks": ["Getting started", "Team goals"]}),
+                "workspace",
+                workspace_id,
+                now,
+                now,
+            ),
+            (
+                "page_project",
+                workspace_id,
+                "Project Tracker",
+                json.dumps({"type": "doc", "blocks": ["Milestones", "Risks", "Notes"]}),
+                "workspace",
+                workspace_id,
+                now,
+                now,
+            ),
+        ]
+        cursor.executemany(
+            """
+            INSERT INTO pages (
+                id,
+                workspace_id,
+                title,
+                content,
+                parent_type,
+                parent_id,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            pages,
+        )
+
+        database_id = "db_tasks"
+        cursor.execute(
+            """
+            INSERT INTO databases (id, workspace_id, name, schema_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                database_id,
+                workspace_id,
+                "Task Board",
+                json.dumps(
+                    {
+                        "properties": {
+                            "Task": {"type": "title"},
+                            "Owner": {"type": "person"},
+                            "Status": {"type": "select"},
+                            "Due": {"type": "date"},
+                        }
                     }
-                }
-            ),
-            now,
-            now,
-        ],
-    )
+                ),
+                now,
+                now,
+            ],
+        )
 
-    rows = [
-        (
-            "row_1",
-            database_id,
-            json.dumps(
-                {
-                    "Task": "Prototype API",
-                    "Owner": "Alex Rivers",
-                    "Status": "In Progress",
-                    "Due": "2026-02-10",
-                }
+        rows = [
+            (
+                "row_1",
+                database_id,
+                json.dumps(
+                    {
+                        "Task": "Prototype API",
+                        "Owner": "Alex Rivers",
+                        "Status": "In Progress",
+                        "Due": "2026-02-10",
+                    }
+                ),
+                now,
+                now,
             ),
-            now,
-            now,
-        ),
-        (
-            "row_2",
-            database_id,
-            json.dumps(
-                {
-                    "Task": "Seed demo data",
-                    "Owner": "Bianca Holt",
-                    "Status": "Done",
-                    "Due": "2026-02-05",
-                }
+            (
+                "row_2",
+                database_id,
+                json.dumps(
+                    {
+                        "Task": "Seed demo data",
+                        "Owner": "Bianca Holt",
+                        "Status": "Done",
+                        "Due": "2026-02-05",
+                    }
+                ),
+                now,
+                now,
             ),
-            now,
-            now,
-        ),
-    ]
-    db.connection.executemany(
-        """
-        INSERT INTO database_rows (id, database_id, properties_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        rows,
-    )
+        ]
+        cursor.executemany(
+            """
+            INSERT INTO database_rows (id, database_id, properties_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
 
-    comments = [
-        ("comment_1", "page_home", "user_alex", "Kickoff complete.", now),
-        ("comment_2", "page_project", "user_bianca", "Risk review scheduled.", now),
-    ]
-    db.connection.executemany(
-        "INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
-        comments,
-    )
-    db.connection.commit()
+        comments = [
+            ("comment_1", "page_home", "user_alex", "Kickoff complete.", now),
+            ("comment_2", "page_project", "user_bianca", "Risk review scheduled.", now),
+        ]
+        cursor.executemany(
+            "INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
+            comments,
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    if force:
+        # Best-effort rebuild of page search index after a full reset.
+        with suppress(sqlite3.OperationalError):
+            cursor.execute("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
+            conn.commit()
 
 
 def _utc_now() -> str:

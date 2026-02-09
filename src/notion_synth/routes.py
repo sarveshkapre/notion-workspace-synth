@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
@@ -6,10 +7,11 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.datastructures import URL
 
-from notion_synth.db import Database, new_id
+from notion_synth.db import Database, new_id, seed_demo
 from notion_synth.fixtures import export_fixture as export_fixture_payload
 from notion_synth.fixtures import import_fixture as import_fixture_payload
 from notion_synth.models import (
+    AdminResetResult,
     Comment,
     CommentCreate,
     DatabaseCreate,
@@ -29,13 +31,23 @@ from notion_synth.models import (
     WorkspaceCreate,
     WorkspaceDeletePreview,
 )
-from notion_synth.models import Database as DatabaseModel
+from notion_synth.models import (
+    Database as DatabaseModel,
+)
 
 router = APIRouter()
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _env_truthy(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _admin_enabled() -> bool:
+    return _env_truthy("NOTION_SYNTH_ADMIN")
 
 
 def _get_db(request: Request) -> Database:
@@ -269,9 +281,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/stats", response_model=Stats, tags=["meta"])
-def stats(request: Request) -> Stats:
-    db = _get_db(request)
+def _stats_for_db(db: Database) -> Stats:
     workspaces = db.query_one("SELECT COUNT(*) AS count FROM workspaces")
     users = db.query_one("SELECT COUNT(*) AS count FROM users")
     pages = db.query_one("SELECT COUNT(*) AS count FROM pages")
@@ -288,6 +298,48 @@ def stats(request: Request) -> Stats:
         database_rows=int(database_rows["count"]) if database_rows else 0,
         comments=int(comments["count"]) if comments else 0,
     )
+
+
+@router.get("/stats", response_model=Stats, tags=["meta"])
+def stats(request: Request) -> Stats:
+    db = _get_db(request)
+    return _stats_for_db(db)
+
+
+@router.post(
+    "/admin/reset",
+    response_model=AdminResetResult,
+    tags=["admin"],
+    responses={
+        200: {"description": "Reset completed (or preview when dry_run=true)."},
+        400: {"description": "Missing confirm=true (required when dry_run=false)."},
+        404: {"description": "Not enabled."},
+    },
+)
+def admin_reset(
+    request: Request,
+    confirm: bool = Query(
+        False,
+        description="Must be true to perform the reset when dry_run=false.",
+    ),
+    dry_run: bool = Query(
+        False,
+        description="When true, do not mutate; return before/after (identical) stats.",
+    ),
+) -> AdminResetResult:
+    if not _admin_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    db = _get_db(request)
+    before = _stats_for_db(db)
+    if dry_run:
+        return AdminResetResult(status="preview", before=before, after=before)
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true required")
+
+    seed_demo(db, force=True)
+    after = _stats_for_db(db)
+    return AdminResetResult(status="ok", before=before, after=after)
 
 
 @router.get("/fixtures/export", response_model=Fixture, tags=["fixtures"])

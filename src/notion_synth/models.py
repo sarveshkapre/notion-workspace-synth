@@ -237,3 +237,37 @@ class Fixture(BaseModel):
 class FixtureImportResult(BaseModel):
     status: str
     inserted: dict[str, int]
+
+
+class AdminResetResult(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "ok",
+                    "before": {
+                        "db_path": "./notion_synth.db",
+                        "workspaces": 2,
+                        "users": 5,
+                        "pages": 4,
+                        "databases": 1,
+                        "database_rows": 2,
+                        "comments": 3,
+                    },
+                    "after": {
+                        "db_path": "./notion_synth.db",
+                        "workspaces": 1,
+                        "users": 3,
+                        "pages": 2,
+                        "databases": 1,
+                        "database_rows": 2,
+                        "comments": 2,
+                    },
+                }
+            ]
+        }
+    )
+
+    status: str
+    before: Stats
+    after: Stats
