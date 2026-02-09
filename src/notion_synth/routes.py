@@ -4,6 +4,7 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.datastructures import URL
 
 from notion_synth.db import Database, new_id
 from notion_synth.fixtures import export_fixture as export_fixture_payload
@@ -49,6 +50,28 @@ def _limit_offset(limit: int, offset: int) -> tuple[int, int]:
 
 def _set_total_header(response: Response, total: int) -> None:
     response.headers["X-Total-Count"] = str(total)
+
+
+def _set_pagination_headers(
+    request: Request,
+    response: Response,
+    *,
+    limit: int,
+    offset: int,
+    has_more: bool,
+) -> None:
+    response.headers["X-Limit"] = str(limit)
+    response.headers["X-Offset"] = str(offset)
+    response.headers["X-Has-More"] = "true" if has_more else "false"
+
+    if not has_more:
+        return
+
+    next_offset = offset + limit
+    response.headers["X-Next-Offset"] = str(next_offset)
+
+    next_url: URL = request.url.include_query_params(limit=limit, offset=next_offset)
+    response.headers["Link"] = f'<{next_url}>; rel="next"'
 
 
 def _parse_json(value: str) -> dict[str, Any]:
@@ -446,6 +469,10 @@ def list_users(
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
 ) -> list[User]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
@@ -467,10 +494,15 @@ def list_users(
         count_row = db.query_one(f"SELECT COUNT(*) AS count FROM users {where}", params)  # nosec B608
         _set_total_header(response, int(count_row["count"]) if count_row else 0)
 
+    query_limit = limit + 1 if include_pagination else limit
     rows = db.query_all(
         f"SELECT * FROM users {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
-        [*params, limit, offset],
+        [*params, query_limit, offset],
     )
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
     return [User(**dict(row)) for row in rows]
 
 
@@ -537,6 +569,10 @@ def list_pages(
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
 ) -> list[Page]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
@@ -561,10 +597,15 @@ def list_pages(
         count_row = db.query_one(f"SELECT COUNT(*) AS count FROM pages {where}", params)  # nosec B608
         _set_total_header(response, int(count_row["count"]) if count_row else 0)
 
+    query_limit = limit + 1 if include_pagination else limit
     rows = db.query_all(
         f"SELECT * FROM pages {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
-        [*params, limit, offset],
+        [*params, query_limit, offset],
     )
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
     return [
         Page(**{**dict(row), "content": _parse_json(row["content"])})
         for row in rows
@@ -680,6 +721,10 @@ def list_databases(
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
 ) -> list[DatabaseModel]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
@@ -701,10 +746,15 @@ def list_databases(
         )
         _set_total_header(response, int(count_row["count"]) if count_row else 0)
 
+    query_limit = limit + 1 if include_pagination else limit
     rows = db.query_all(
         f"SELECT * FROM databases {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
-        [*params, limit, offset],
+        [*params, query_limit, offset],
     )
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
     return [
         DatabaseModel(**{**dict(row), "schema": _parse_json(row["schema_json"])})
         for row in rows
@@ -810,6 +860,10 @@ def list_database_rows(
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
 ) -> list[DatabaseRow]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
@@ -849,10 +903,15 @@ def list_database_rows(
             params,
         )
         _set_total_header(response, int(count_row["count"]) if count_row else 0)
+    query_limit = limit + 1 if include_pagination else limit
     rows = db.query_all(
         f"SELECT * FROM database_rows {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
-        [*params, limit, offset],
+        [*params, query_limit, offset],
     )
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
     return [
         DatabaseRow(**{**dict(row), "properties": _parse_json(row["properties_json"])})
         for row in rows
@@ -950,6 +1009,10 @@ def list_comments(
     limit: int = Query(50),
     offset: int = Query(0),
     include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
 ) -> list[Comment]:
     db = _get_db(request)
     limit, offset = _limit_offset(limit, offset)
@@ -968,10 +1031,15 @@ def list_comments(
         count_row = db.query_one(f"SELECT COUNT(*) AS count FROM comments {where}", params)  # nosec B608
         _set_total_header(response, int(count_row["count"]) if count_row else 0)
 
+    query_limit = limit + 1 if include_pagination else limit
     rows = db.query_all(
         f"SELECT * FROM comments {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
-        [*params, limit, offset],
+        [*params, query_limit, offset],
     )
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
     return [Comment(**dict(row)) for row in rows]
 
 

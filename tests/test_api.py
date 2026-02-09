@@ -210,6 +210,27 @@ def test_list_pages_filters_and_total_header() -> None:
     assert pages[0]["id"] == "page_home"
 
 
+def test_list_pages_pagination_headers() -> None:
+    client = _client()
+
+    response = client.get("/pages?limit=1&offset=0&include_pagination=true")
+    assert response.status_code == 200
+    assert response.headers.get("x-limit") == "1"
+    assert response.headers.get("x-offset") == "0"
+    assert response.headers.get("x-has-more") == "true"
+    assert response.headers.get("x-next-offset") == "1"
+    assert "rel=\"next\"" in response.headers.get("link", "")
+    assert "offset=1" in response.headers.get("link", "")
+    assert len(response.json()) == 1
+
+    last_page = client.get("/pages?limit=1&offset=1&include_pagination=true")
+    assert last_page.status_code == 200
+    assert last_page.headers.get("x-has-more") == "false"
+    assert last_page.headers.get("x-next-offset") is None
+    assert last_page.headers.get("link") is None
+    assert len(last_page.json()) == 1
+
+
 def test_fixtures_export_import_roundtrip() -> None:
     client_a = TestClient(create_app(":memory:"))
     exported = client_a.get("/fixtures/export")

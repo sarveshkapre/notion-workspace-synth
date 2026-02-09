@@ -9,6 +9,7 @@ Synthetic Notion-like workspace API with seeded demo org. Use it to generate rea
 - Simple REST API with JSON payloads
 - Local-first SQLite storage (no auth required)
 - Optional `X-Total-Count` totals on list endpoints (`include_total=true`)
+- Optional paging metadata on list endpoints via headers (`include_pagination=true`, including `Link: ...; rel="next"`)
 - Built-in landing page (`/`) and dataset stats (`/stats`)
 
 ## Quickstart

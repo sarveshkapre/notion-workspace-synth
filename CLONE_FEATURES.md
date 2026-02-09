@@ -7,8 +7,6 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P1 (selected): Pagination metadata on list endpoints via headers:
-  - `include_pagination=true` -> `X-Has-More`, `X-Next-Offset`, `X-Limit`, `X-Offset`, and `Link: <...>; rel="next"`.
 - [ ] P1 (selected): Page search endpoint:
   - `GET /search/pages?q=...` with best-effort SQLite FTS5 backing (fallback to `LIKE` if FTS5 unavailable).
 - [ ] P2: Optional fault injection for demos/tests (`?delay_ms=` and/or `?fail_rate=`) with strict opt-in (env-guarded).
@@ -20,6 +18,8 @@
 - [ ] P3: Add request/response examples in docs for common list filters + paging patterns.
 
 ## Implemented
+- [x] 2026-02-09: Added paging metadata headers for list endpoints (`include_pagination=true`), including `Link: <...>; rel="next"`.
+  Evidence: `src/notion_synth/routes.py` (pagination headers), `tests/test_api.py::test_list_pages_pagination_headers`, `README.md`.
 - [x] 2026-02-09: Tracked repo-root `AGENTS.md` autonomous engineering contract and refreshed the task backlog for cycle 1.
   Evidence: `AGENTS.md`, `CLONE_FEATURES.md`.
 - [x] 2026-02-09: Fixed CI secret scan reliability by fetching full git history for gitleaks (`actions/checkout` `fetch-depth: 0`).
