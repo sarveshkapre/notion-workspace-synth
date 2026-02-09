@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    image: notion-workspace-synth:local
+    environment:
+      # Persist the DB outside the container filesystem.
+      NOTION_SYNTH_DB: /data/notion_synth.db
+      # Optional: better concurrent reads during demos.
+      NOTION_SYNTH_SQLITE_WAL: "1"
+      # Optional: reduce transient lock errors for bursty clients.
+      NOTION_SYNTH_SQLITE_BUSY_TIMEOUT_MS: "5000"
+    ports:
+      # Safe-by-default: bind only to localhost.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - notion_synth_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  notion_synth_data:

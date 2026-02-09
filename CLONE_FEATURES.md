@@ -7,8 +7,9 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P2: Add request/response examples in docs for common list filters + paging patterns (include `include_total`, `include_pagination`, row filter operators).
-- [ ] P2: Docker Compose for local demos (db volume + API) and document “safe demo” deployment guidance.
+- [ ] P1 (cycle-4): Add Docker Compose for local demos (API + persisted SQLite volume) and document “safe demo” deployment guidance.
+- [ ] P1 (cycle-4): Add optional CORS support for local UIs (env-configured allowed origins; default off).
+- [ ] P2 (cycle-4): Add request/response examples in docs for common list filters + paging patterns (include `include_total`, `include_pagination`, row filter operators).
 - [ ] P2: Fixture “packs” (engineering/org presets) to improve realism without external dependencies.
 - [ ] P3: Add synthetic file attachments metadata (minimal shape, no blob hosting).
 - [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy).

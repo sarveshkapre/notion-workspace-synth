@@ -3,6 +3,7 @@
 ## Quick commands
 - Setup: `make setup`
 - Dev server: `make dev`
+- Docker Compose demo: `docker compose up --build`
 - Test: `make test`
 - Lint: `make lint`
 - Typecheck: `make typecheck`

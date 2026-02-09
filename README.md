@@ -181,6 +181,13 @@ docker build -t notion-workspace-synth .
 docker run --rm -p 8000:8000 notion-workspace-synth
 ```
 
+## Docker Compose (persisted local DB)
+For local demos that should persist across restarts:
+```bash
+docker compose up --build
+```
+This binds to `127.0.0.1:8000` by default and stores the SQLite DB in a named Docker volume.
+
 ## Repo docs
 All repository docs (except this README) live in `docs/`. See `docs/ENTERPRISE.md` for enterprise
 usage guidance.
