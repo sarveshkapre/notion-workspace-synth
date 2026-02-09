@@ -24,3 +24,14 @@ This file records real failures/regressions and the prevention rules adopted aft
   - Treat “tool fails due to checkout depth” as a CI configuration bug; fix workflow rather than weakening the scan.
 - Evidence: `.github/workflows/ci.yml`.
 - Trust: `local` (workflow change), `external` (CI failure + recovery)
+
+## 2026-02-09: CI checkout flaked with GitHub 5xx during full-history fetch
+- Impact: CI run failed before installing deps/tests, reducing confidence in mainline health.
+- Detection: GitHub Actions run `21833223544` failed on 2026-02-09 at `actions/checkout`.
+- Root cause: GitHub returned HTTP 500 during `git fetch` inside `actions/checkout` while fetching all branches/tags with `fetch-depth: 0`. (inferred: full-history fetch increased exposure to transient 5xx)
+- Fix: Reduced `actions/checkout` `fetch-depth` to `50` and reran CI; subsequent run passed (`21833968192`).
+- Prevention rules:
+  - Prefer bounded `fetch-depth` values that satisfy scanners, instead of full-history fetches by default.
+  - When `actions/checkout` fails with clear infrastructure HTTP 5xx, rerun before making product code changes.
+- Evidence: `.github/workflows/ci.yml`, `gh run view 21833223544 --log-failed`, `gh run watch 21833968192 --exit-status`.
+- Trust: `local` (workflow change), `external` (CI failure + recovery)

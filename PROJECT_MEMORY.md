@@ -160,6 +160,10 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21825081080 --exit-status`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21825198642 --exit-status`
+- CI (fail) on 2026-02-09:
+  - `gh run view 21833223544 --log-failed` -> `actions/checkout` fetch returned HTTP `500` (GitHub internal error)
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21833968192 --exit-status`
 - `make check` (pass) on 2026-02-09 (Docker Compose docs + CORS + README examples).
 - Smoke (pass) on 2026-02-09 (CORS + paging headers):
   - `TMP_DB=$(mktemp /tmp/notion_synth.XXXXXX).db NOTION_SYNTH_DB=$TMP_DB NOTION_SYNTH_CORS_ORIGINS=http://localhost:5173 .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8021`
@@ -173,4 +177,9 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - Root cause: gitleaks scans a git commit range on push; with depth=1 the base commit is missing and `git log` fails.
   - Prevention rule: run history-range scanners (gitleaks, release tooling) only with full history in CI.
   - Evidence: GitHub Actions failure `21812114129`, fix commit `120f3a2`.
+  - Trust: `external` (failure), `local` (workflow change)
+- 2026-02-09: CI flaked on `actions/checkout` fetch with GitHub HTTP 500/502/503 during full-history fetch; mitigated by reducing `fetch-depth` and rerunning CI.
+  - Root cause: transient GitHub fetch errors (5xx) during `git fetch` in Actions; full-history fetches increase the surface area/time of fetch operations. (inferred)
+  - Prevention rule: prefer bounded `fetch-depth` values that are sufficient for scanners, and rerun when failures are clearly infrastructure (HTTP 5xx).
+  - Evidence: `gh run view 21833223544 --log-failed` (5xx on checkout), `.github/workflows/ci.yml` (`fetch-depth: 50`), `gh run watch 21833968192 --exit-status` (pass).
   - Trust: `external` (failure), `local` (workflow change)
