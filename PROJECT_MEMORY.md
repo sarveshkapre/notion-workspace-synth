@@ -11,6 +11,14 @@ This file is intentionally lightweight and append-only. It captures decisions an
 
 ## Decisions
 
+### 2026-02-09: Add pagination metadata via response headers
+- Decision: list endpoints that support `limit`/`offset` accept `include_pagination=true` and emit paging metadata via headers (`X-Has-More`, `X-Next-Offset`, `X-Limit`, `X-Offset`, plus `Link: <...>; rel="next"` when applicable).
+- Why: keep response bodies backward-compatible (still lists) while making client iteration and demo scripting easier.
+- Evidence: `src/notion_synth/routes.py`, `tests/test_api.py::test_list_pages_pagination_headers`, `README.md`.
+- Commit: `54e879a`
+- Trust: `local`
+- Confidence: `high`
+
 ### 2026-02-09: Guarded workspace deletion semantics
 - Decision: `DELETE /workspaces/{workspace_id}` requires `cascade=true` when dependent objects exist; seeded demo workspace `ws_demo` additionally requires `force=true`.
 - Why: avoid accidental data loss while still enabling deterministic cleanup for demos/tests.
@@ -70,6 +78,7 @@ This file is intentionally lightweight and append-only. It captures decisions an
 
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
+- `make check` (pass) on 2026-02-09 (pagination headers).
 - `make security` (pass) on 2026-02-09.
 - Smoke (pass) on 2026-02-09:
   - `TMP_BASE=$(mktemp /tmp/notion_synth.XXXXXX) && TMP_DB="$TMP_BASE.db" && mv "$TMP_BASE" "$TMP_DB" && NOTION_SYNTH_DB=$TMP_DB .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8001`
