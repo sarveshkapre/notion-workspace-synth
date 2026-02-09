@@ -100,6 +100,13 @@ def _count(db: Database, query: str, params: list[Any]) -> int:
     return int(row["count"]) if row else 0
 
 
+def _has_pages_fts(db: Database) -> bool:
+    row = db.query_one(
+        "SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='pages_fts'"
+    )
+    return row is not None
+
+
 def _homepage_html() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -710,6 +717,89 @@ def delete_page(page_id: str, request: Request) -> Response:
         raise HTTPException(status_code=500, detail="Failed to delete page") from exc
 
     return Response(status_code=204)
+
+
+@router.get("/search/pages", response_model=list[Page], tags=["search"])
+def search_pages(
+    request: Request,
+    response: Response,
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Search query (matches page title and content).",
+    ),
+    workspace_id: str | None = None,
+    limit: int = Query(50),
+    offset: int = Query(0),
+    include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
+) -> list[Page]:
+    db = _get_db(request)
+    limit, offset = _limit_offset(limit, offset)
+
+    query_limit = limit + 1 if include_pagination else limit
+
+    if _has_pages_fts(db):
+        conditions: list[str] = ["pages_fts MATCH ?"]
+        params: list[Any] = [q]
+        if workspace_id:
+            conditions.append("p.workspace_id = ?")
+            params.append(workspace_id)
+        where = f"WHERE {' AND '.join(conditions)}"
+
+        if include_total:
+            count_query = f"""
+            SELECT COUNT(*) AS count
+            FROM pages_fts
+            JOIN pages p ON p.rowid = pages_fts.rowid
+            {where}
+            """  # nosec B608
+            count_row = db.query_one(count_query, params)
+            _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+        query = f"""
+        SELECT p.*
+        FROM pages_fts
+        JOIN pages p ON p.rowid = pages_fts.rowid
+        {where}
+        ORDER BY bm25(pages_fts)
+        LIMIT ? OFFSET ?
+        """  # nosec B608
+        rows = db.query_all(query, [*params, query_limit, offset])
+    else:
+        like = f"%{q}%"
+        conditions = ["(title LIKE ? OR content LIKE ?)"]
+        params = [like, like]
+        if workspace_id:
+            conditions.append("workspace_id = ?")
+            params.append(workspace_id)
+        where = f"WHERE {' AND '.join(conditions)}"
+
+        if include_total:
+            count_row = db.query_one(  # nosec B608
+                f"SELECT COUNT(*) AS count FROM pages {where}",  # nosec B608
+                params,
+            )
+            _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+        rows = db.query_all(
+            f"SELECT * FROM pages {where} ORDER BY created_at LIMIT ? OFFSET ?",  # nosec B608
+            [*params, query_limit, offset],
+        )
+
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
+
+    return [
+        Page(**{**dict(row), "content": _parse_json(row["content"])})
+        for row in rows
+    ]
 
 
 @router.get("/databases", response_model=list[DatabaseModel])

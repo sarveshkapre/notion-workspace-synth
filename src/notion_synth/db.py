@@ -159,6 +159,71 @@ def _init_schema(db: Database) -> None:
         "CREATE INDEX IF NOT EXISTS idx_comments_author_created ON comments (author_id, created_at)"
     )
 
+    # Best-effort full-text search index for pages (optional; depends on SQLite build).
+    # If FTS5 isn't available, search falls back to LIKE scans.
+    try:
+        existing = db.query_one(
+            "SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='pages_fts'"
+        )
+        db.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts
+            USING fts5(
+                title,
+                content,
+                content='pages',
+                content_rowid='rowid'
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS pages_fts_ai
+            AFTER INSERT ON pages
+            BEGIN
+                INSERT INTO pages_fts(rowid, title, content)
+                VALUES (new.rowid, new.title, new.content);
+            END
+            """
+        )
+        db.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS pages_fts_ad
+            AFTER DELETE ON pages
+            BEGIN
+                INSERT INTO pages_fts(pages_fts, rowid, title, content)
+                VALUES('delete', old.rowid, old.title, old.content);
+            END
+            """
+        )
+        db.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS pages_fts_au
+            AFTER UPDATE ON pages
+            BEGIN
+                INSERT INTO pages_fts(pages_fts, rowid, title, content)
+                VALUES('delete', old.rowid, old.title, old.content);
+                INSERT INTO pages_fts(rowid, title, content)
+                VALUES (new.rowid, new.title, new.content);
+            END
+            """
+        )
+
+        # Only rebuild when the index is first created or clearly empty.
+        # This keeps search usable for existing DBs without introducing migrations.
+        should_rebuild = existing is None
+        if not should_rebuild:
+            pages_count = db.query_one("SELECT COUNT(*) AS count FROM pages")
+            fts_count = db.query_one("SELECT COUNT(*) AS count FROM pages_fts")
+            should_rebuild = (
+                int(pages_count["count"]) if pages_count else 0
+            ) > 0 and (int(fts_count["count"]) if fts_count else 0) == 0
+        if should_rebuild:
+            db.execute("INSERT INTO pages_fts(pages_fts) VALUES('rebuild')")
+    except sqlite3.OperationalError:
+        # "no such module: fts5" (or similar): keep schema usable without FTS.
+        pass
+
 
 def _seed_if_empty(db: Database) -> None:
     row = db.query_one("SELECT COUNT(*) as count FROM workspaces")

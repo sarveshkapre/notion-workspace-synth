@@ -22,6 +22,11 @@ API docs:
 - OpenAPI UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
+Search:
+```bash
+curl "http://localhost:8000/search/pages?q=Welcome"
+```
+
 ## Example
 ```bash
 curl http://localhost:8000/pages

@@ -231,6 +231,13 @@ def test_list_pages_pagination_headers() -> None:
     assert len(last_page.json()) == 1
 
 
+def test_search_pages() -> None:
+    client = _client()
+    response = client.get("/search/pages?q=Welcome")
+    assert response.status_code == 200
+    pages = response.json()
+    assert [page["id"] for page in pages] == ["page_home"]
+
 def test_fixtures_export_import_roundtrip() -> None:
     client_a = TestClient(create_app(":memory:"))
     exported = client_a.get("/fixtures/export")
