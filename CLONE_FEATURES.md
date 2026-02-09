@@ -7,12 +7,17 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P2: Improve list endpoint pagination UX: add `Link` header or `next_offset` metadata for faster client iteration.
-- [ ] P3: Add optional fault injection for demos/tests (`?delay_ms=` and/or `?fail_rate=`) with strict opt-in.
-- [ ] P3: Add SQLite FTS-backed search for pages (`/search/pages?q=`) to match common Notion “search everywhere” workflows.
-- [ ] P3: Add fixture “packs” (engineering/org presets) to improve realism without external dependencies.
-- [ ] P3: Add a guarded reset endpoint to restore seeded demo data (`POST /admin/reset`) for deterministic demos.
-- [ ] P3: Add Docker Compose for local demos (db volume + API) and document “safe demo” deployment guidance.
+- [ ] P1 (selected): Pagination metadata on list endpoints via headers:
+  - `include_pagination=true` -> `X-Has-More`, `X-Next-Offset`, `X-Limit`, `X-Offset`, and `Link: <...>; rel="next"`.
+- [ ] P1 (selected): Page search endpoint:
+  - `GET /search/pages?q=...` with best-effort SQLite FTS5 backing (fallback to `LIKE` if FTS5 unavailable).
+- [ ] P2: Optional fault injection for demos/tests (`?delay_ms=` and/or `?fail_rate=`) with strict opt-in (env-guarded).
+- [ ] P2: Fixture “packs” (engineering/org presets) to improve realism without external dependencies.
+- [ ] P2: Guarded reset endpoint to restore seeded demo data (`POST /admin/reset`) for deterministic demos (env-guarded).
+- [ ] P3: Docker Compose for local demos (db volume + API) and document “safe demo” deployment guidance.
+- [ ] P3: Add synthetic file attachments metadata (minimal shape, no blob hosting).
+- [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy).
+- [ ] P3: Add request/response examples in docs for common list filters + paging patterns.
 
 ## Implemented
 - [x] 2026-02-09: Tracked repo-root `AGENTS.md` autonomous engineering contract and refreshed the task backlog for cycle 1.
