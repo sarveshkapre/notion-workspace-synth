@@ -166,6 +166,8 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21833968192 --exit-status`
 - CI (pass) on 2026-02-09:
   - `gh run watch 21834008996 --exit-status`
+- CI (pass) on 2026-02-09:
+  - `gh run watch 21834175788 --exit-status` (completed with a checkout-retry warning annotation about GitHub HTTP 500, but job succeeded)
 - `make check` (pass) on 2026-02-09 (Docker Compose docs + CORS + README examples).
 - Smoke (pass) on 2026-02-09 (CORS + paging headers):
   - `TMP_DB=$(mktemp /tmp/notion_synth.XXXXXX).db NOTION_SYNTH_DB=$TMP_DB NOTION_SYNTH_CORS_ORIGINS=http://localhost:5173 .venv/bin/python -m uvicorn notion_synth.main:app --host 127.0.0.1 --port 8021`
