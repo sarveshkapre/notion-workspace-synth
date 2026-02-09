@@ -10,6 +10,7 @@ from starlette.datastructures import URL
 from notion_synth.db import Database, new_id, seed_demo
 from notion_synth.fixtures import export_fixture as export_fixture_payload
 from notion_synth.fixtures import import_fixture as import_fixture_payload
+from notion_synth.generator import generate_fixture
 from notion_synth.models import (
     AdminResetResult,
     Comment,
@@ -21,6 +22,9 @@ from notion_synth.models import (
     DatabaseUpdate,
     Fixture,
     FixtureImportResult,
+    PackApplyPreview,
+    PackApplyResult,
+    PackInfo,
     Page,
     PageCreate,
     PageUpdate,
@@ -34,6 +38,7 @@ from notion_synth.models import (
 from notion_synth.models import (
     Database as DatabaseModel,
 )
+from notion_synth.packs import get_pack, list_packs
 
 router = APIRouter()
 
@@ -304,6 +309,110 @@ def _stats_for_db(db: Database) -> Stats:
 def stats(request: Request) -> Stats:
     db = _get_db(request)
     return _stats_for_db(db)
+
+
+@router.get("/packs", response_model=list[PackInfo], tags=["packs"])
+def packs() -> list[PackInfo]:
+    infos: list[PackInfo] = []
+    for pack in list_packs():
+        infos.append(
+            PackInfo(
+                name=pack.name,
+                description=pack.description,
+                profile=pack.profile,
+                industry=pack.industry,
+                default_company=pack.default_company,
+                default_seed=pack.default_seed,
+                counts={
+                    "users": pack.users,
+                    "teams": pack.teams,
+                    "projects": pack.projects,
+                    "incidents": pack.incidents,
+                    "candidates": pack.candidates,
+                },
+            )
+        )
+    return infos
+
+
+@router.post(
+    "/admin/apply-pack",
+    response_model=PackApplyResult | PackApplyPreview,
+    tags=["admin"],
+    responses={
+        200: {"description": "Pack applied (or preview when dry_run=true)."},
+        400: {"description": "Missing confirm=true (required when dry_run=false) or invalid pack name."},
+        404: {"description": "Not enabled."},
+    },
+)
+def admin_apply_pack(
+    request: Request,
+    name: str = Query(..., description="Pack name. See GET /packs."),
+    confirm: bool = Query(False, description="Must be true to apply when dry_run=false."),
+    dry_run: bool = Query(False, description="When true, do not mutate; return preview."),
+    company: str | None = Query(None, description="Optional override for the pack's default company name."),
+    seed: int | None = Query(None, description="Optional override for the pack's default deterministic seed."),
+) -> PackApplyResult | PackApplyPreview:
+    if not _admin_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    pack = get_pack(name)
+    if pack is None:
+        raise HTTPException(status_code=400, detail="Unknown pack")
+
+    db = _get_db(request)
+    before = _stats_for_db(db)
+
+    config = pack.to_config(company=company, seed=seed)
+    fixture = generate_fixture(config)
+    expected_inserted = {
+        "workspaces": len(fixture.workspaces),
+        "users": len(fixture.users),
+        "pages": len(fixture.pages),
+        "databases": len(fixture.databases),
+        "database_rows": len(fixture.database_rows),
+        "comments": len(fixture.comments),
+    }
+    pack_info = PackInfo(
+        name=pack.name,
+        description=pack.description,
+        profile=pack.profile,
+        industry=pack.industry,
+        default_company=pack.default_company,
+        default_seed=pack.default_seed,
+        counts={
+            "users": pack.users,
+            "teams": pack.teams,
+            "projects": pack.projects,
+            "incidents": pack.incidents,
+            "candidates": pack.candidates,
+        },
+    )
+
+    if dry_run:
+        return PackApplyPreview(
+            status="preview",
+            pack=pack_info,
+            before=before,
+            after=before,
+            expected_inserted=expected_inserted,
+        )
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true required")
+
+    try:
+        result = import_fixture_payload(db, fixture, mode="replace")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    after = _stats_for_db(db)
+    return PackApplyResult(
+        status="ok",
+        pack=pack_info,
+        before=before,
+        after=after,
+        inserted=result.inserted,
+    )
 
 
 @router.post(

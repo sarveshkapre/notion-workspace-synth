@@ -271,3 +271,29 @@ class AdminResetResult(BaseModel):
     status: str
     before: Stats
     after: Stats
+
+
+class PackInfo(BaseModel):
+    name: str
+    description: str
+    profile: str
+    industry: str
+    default_company: str
+    default_seed: int
+    counts: dict[str, int]
+
+
+class PackApplyPreview(BaseModel):
+    status: str
+    pack: PackInfo
+    before: Stats
+    after: Stats
+    expected_inserted: dict[str, int]
+
+
+class PackApplyResult(BaseModel):
+    status: str
+    pack: PackInfo
+    before: Stats
+    after: Stats
+    inserted: dict[str, int]
