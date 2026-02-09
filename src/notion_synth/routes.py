@@ -59,6 +59,11 @@ def _json_path_for_property(property_name: str) -> str:
     return f'$."{escaped}"'
 
 
+def _count(db: Database, query: str, params: list[Any]) -> int:
+    row = db.query_one(query, params)
+    return int(row["count"]) if row else 0
+
+
 def _homepage_html() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -290,6 +295,105 @@ def get_workspace(workspace_id: str, request: Request) -> Workspace:
     if row is None:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return Workspace(**dict(row))
+
+
+@router.delete("/workspaces/{workspace_id}", status_code=204)
+def delete_workspace(
+    workspace_id: str,
+    request: Request,
+    cascade: bool = Query(
+        False,
+        description="When true, delete the workspace and all dependent objects (users/pages/databases/rows/comments).",
+    ),
+    force: bool = Query(
+        False,
+        description="When true, allow deleting the seeded demo workspace (ws_demo).",
+    ),
+) -> Response:
+    db = _get_db(request)
+    row = db.query_one("SELECT id FROM workspaces WHERE id = ?", [workspace_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if workspace_id == "ws_demo" and not force:
+        raise HTTPException(
+            status_code=400,
+            detail="Refusing to delete demo workspace without force=true",
+        )
+
+    counts = {
+        "users": _count(
+            db, "SELECT COUNT(*) AS count FROM users WHERE workspace_id = ?", [workspace_id]
+        ),
+        "pages": _count(
+            db, "SELECT COUNT(*) AS count FROM pages WHERE workspace_id = ?", [workspace_id]
+        ),
+        "databases": _count(
+            db,
+            "SELECT COUNT(*) AS count FROM databases WHERE workspace_id = ?",
+            [workspace_id],
+        ),
+    }
+    counts["database_rows"] = _count(
+        db,
+        """
+        SELECT COUNT(*) AS count
+        FROM database_rows
+        WHERE database_id IN (SELECT id FROM databases WHERE workspace_id = ?)
+        """,
+        [workspace_id],
+    )
+    counts["comments"] = _count(
+        db,
+        """
+        SELECT COUNT(*) AS count
+        FROM comments
+        WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)
+           OR author_id IN (SELECT id FROM users WHERE workspace_id = ?)
+        """,
+        [workspace_id, workspace_id],
+    )
+
+    if not cascade and any(value > 0 for value in counts.values()):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Workspace has dependent objects; re-run with cascade=true to delete",
+                "workspace_id": workspace_id,
+                "counts": counts,
+            },
+        )
+
+    conn = db.connection
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        # Comments depend on both pages + users.
+        cursor.execute(
+            """
+            DELETE FROM comments
+            WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)
+               OR author_id IN (SELECT id FROM users WHERE workspace_id = ?)
+            """,
+            [workspace_id, workspace_id],
+        )
+        cursor.execute(
+            """
+            DELETE FROM database_rows
+            WHERE database_id IN (SELECT id FROM databases WHERE workspace_id = ?)
+            """,
+            [workspace_id],
+        )
+        cursor.execute("DELETE FROM databases WHERE workspace_id = ?", [workspace_id])
+        cursor.execute("DELETE FROM pages WHERE workspace_id = ?", [workspace_id])
+        cursor.execute("DELETE FROM users WHERE workspace_id = ?", [workspace_id])
+        cursor.execute("DELETE FROM workspaces WHERE id = ?", [workspace_id])
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete workspace") from exc
+
+    return Response(status_code=204)
 
 
 @router.get("/users", response_model=list[User])

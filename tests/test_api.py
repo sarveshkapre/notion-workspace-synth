@@ -57,6 +57,87 @@ def test_create_user_rejects_invalid_workspace() -> None:
     assert created_user.status_code == 400
 
 
+def test_delete_workspace_requires_cascade_and_cascades() -> None:
+    client = _client()
+
+    created_ws = client.post("/workspaces", json={"name": "Acme"})
+    assert created_ws.status_code == 201
+    ws_id = created_ws.json()["id"]
+
+    created_user = client.post(
+        "/users",
+        json={"workspace_id": ws_id, "name": "Taylor", "email": "taylor@example.com"},
+    )
+    assert created_user.status_code == 201
+    user_id = created_user.json()["id"]
+
+    created_page = client.post(
+        "/pages",
+        json={
+            "workspace_id": ws_id,
+            "title": "Notes",
+            "content": {"blocks": ["Line 1"]},
+            "parent_type": "workspace",
+            "parent_id": ws_id,
+        },
+    )
+    assert created_page.status_code == 201
+    page_id = created_page.json()["id"]
+
+    created_db = client.post(
+        "/databases",
+        json={
+            "workspace_id": ws_id,
+            "name": "Tickets",
+            "schema": {"properties": {"Title": {"type": "title"}, "Status": {"type": "select"}}},
+        },
+    )
+    assert created_db.status_code == 201
+    db_id = created_db.json()["id"]
+
+    created_row = client.post(
+        f"/databases/{db_id}/rows",
+        json={"properties": {"Title": "Investigate", "Status": "Open"}},
+    )
+    assert created_row.status_code == 201
+
+    created_comment = client.post(
+        "/comments",
+        json={"page_id": page_id, "author_id": user_id, "body": "Ship it."},
+    )
+    assert created_comment.status_code == 201
+
+    refused = client.delete(f"/workspaces/{ws_id}")
+    assert refused.status_code == 409
+    detail = refused.json()["detail"]
+    assert detail["workspace_id"] == ws_id
+    assert detail["counts"]["users"] == 1
+    assert detail["counts"]["pages"] == 1
+    assert detail["counts"]["databases"] == 1
+    assert detail["counts"]["database_rows"] == 1
+    assert detail["counts"]["comments"] == 1
+
+    deleted = client.delete(f"/workspaces/{ws_id}?cascade=true")
+    assert deleted.status_code == 204
+    assert client.get(f"/workspaces/{ws_id}").status_code == 404
+    assert client.get(f"/users?workspace_id={ws_id}").json() == []
+    assert client.get(f"/pages?workspace_id={ws_id}").json() == []
+    assert client.get(f"/databases?workspace_id={ws_id}").json() == []
+    assert client.get(f"/comments?author_id={user_id}").json() == []
+
+
+def test_delete_demo_workspace_requires_force() -> None:
+    client = _client()
+
+    refused = client.delete("/workspaces/ws_demo?cascade=true")
+    assert refused.status_code == 400
+
+    deleted = client.delete("/workspaces/ws_demo?cascade=true&force=true")
+    assert deleted.status_code == 204
+    assert client.get("/workspaces/ws_demo").status_code == 404
+    assert client.get("/stats").json()["workspaces"] == 0
+
+
 def test_create_page() -> None:
     client = _client()
     payload = {
