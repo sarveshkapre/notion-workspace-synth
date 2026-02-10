@@ -144,7 +144,7 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Decision: add CLI subcommands for discoverability and local dataset resets: `notion-synth profiles list`, `notion-synth packs list`, and `notion-synth packs apply` (with `--dry-run` preview and `--confirm` guard), plus a runnable end-to-end smoke script (`make smoke`).
 - Why: reduces “many flags” friction, improves safe local resets without needing the admin HTTP endpoint, and provides a stable smoke verification path for maintainers.
 - Evidence: `src/notion_synth/cli.py`, `tests/test_cli_packs_profiles.py`, `scripts/demo_smoke.py`, `Makefile`, `README.md`.
-- Commit: (fill after commit)
+- Commit: `98025e0` (CLI), `64b4827` (smoke)
 - Trust: `local`
 - Confidence: `high`
 
@@ -219,6 +219,12 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - `make check` (pass) on 2026-02-10.
 - `make security` (pass) on 2026-02-10.
 - `make smoke` (pass) on 2026-02-10.
+- CI (pass) on 2026-02-10:
+  - `gh run watch 21859503330 --exit-status` (commit `98025e0`)
+- CI (pass) on 2026-02-10:
+  - `gh run watch 21859534573 --exit-status` (commit `64b4827`)
+- CI (pass) on 2026-02-10:
+  - `gh run watch 21859562994 --exit-status` (commit `e0388eb`)
 
 ## Mistakes And Fixes
 - 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.
