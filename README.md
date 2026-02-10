@@ -119,6 +119,17 @@ notion-synth import fixture.json --mode merge
 Profiles are deterministic by seed, so enterprise users can reproduce datasets at scale without
 shipping any real data.
 
+List available profiles and packs:
+```bash
+notion-synth profiles list
+notion-synth packs list
+```
+
+Apply a pack directly to a local SQLite DB (destructive; use `--dry-run` to preview):
+```bash
+notion-synth packs apply --name engineering_small --db notion_synth.db --confirm
+```
+
 ## CLI (Real Notion + Entra)
 Generate a roster template:
 ```bash
@@ -234,6 +245,8 @@ For local demos that should persist across restarts:
 docker compose up --build
 ```
 This binds to `127.0.0.1:8000` by default and stores the SQLite DB in a named Docker volume.
+The Compose service also includes a healthcheck that hits `/health`; the first start seeds the demo org into
+the persisted DB (you can later reset/apply packs via admin endpoints).
 
 ## Repo docs
 All repository docs (except this README) live in `docs/`. See `docs/ENTERPRISE.md` for enterprise

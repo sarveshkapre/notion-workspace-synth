@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
 from notion_synth.audit import AuditLog
 from notion_synth.blueprint_generator import BlueprintConfig, generate_blueprint
 from notion_synth.blueprint_models import Blueprint
-from notion_synth.db import connect
+from notion_synth.db import Database, connect
 from notion_synth.fixtures import export_fixture, import_fixture
 from notion_synth.generator import PROFILES, SyntheticWorkspaceConfig, generate_fixture
 from notion_synth.llm.enrich import enrich_blueprint
 from notion_synth.models import Fixture
+from notion_synth.packs import FixturePack, get_pack, list_packs
 from notion_synth.providers.entra.apply import apply_entra
 from notion_synth.providers.entra.graph import GraphClient
 from notion_synth.providers.entra.verify import verify_provisioning
@@ -96,6 +98,40 @@ def main(argv: list[str] | None = None) -> int:
         default="replace",
         help="Import mode: replace wipes existing data, merge upserts.",
     )
+
+    profiles_parser = subparsers.add_parser("profiles", help="Synthetic data profile utilities.")
+    profiles_sub = profiles_parser.add_subparsers(dest="profiles_command", required=True)
+    profiles_list = profiles_sub.add_parser("list", help="List available profiles.")
+    profiles_list.add_argument(
+        "--output",
+        "-o",
+        default="-",
+        help="Write JSON to a file path (default: stdout).",
+    )
+
+    packs_parser = subparsers.add_parser("packs", help="Fixture pack presets for local demos/tests.")
+    packs_sub = packs_parser.add_subparsers(dest="packs_command", required=True)
+    packs_list = packs_sub.add_parser("list", help="List available packs.")
+    packs_list.add_argument(
+        "--output",
+        "-o",
+        default="-",
+        help="Write JSON to a file path (default: stdout).",
+    )
+    packs_apply = packs_sub.add_parser(
+        "apply",
+        help="Apply a pack to a local DB (replace). Use --dry-run to preview, or --confirm to apply.",
+    )
+    packs_apply.add_argument("--name", required=True, help="Pack name (see `packs list`).")
+    packs_apply.add_argument(
+        "--db",
+        default=None,
+        help="SQLite path or URI (defaults to NOTION_SYNTH_DB).",
+    )
+    packs_apply.add_argument("--company", default=None, help="Optional override for the pack company name.")
+    packs_apply.add_argument("--seed", type=int, default=None, help="Optional deterministic seed override.")
+    packs_apply.add_argument("--dry-run", action="store_true", help="Preview without mutating the DB.")
+    packs_apply.add_argument("--confirm", action="store_true", help="Required to apply when not --dry-run.")
 
     roster_parser = subparsers.add_parser("roster", help="Roster utilities.")
     roster_sub = roster_parser.add_subparsers(dest="roster_command", required=True)
@@ -214,6 +250,81 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(args.db)
         fixture_result = import_fixture(db, fixture, mode=args.mode)
         print(json.dumps(fixture_result.model_dump(), indent=2))
+        return 0
+
+    elif args.command == "profiles" and args.profiles_command == "list":
+        profiles_payload: list[dict[str, object]] = [
+            {
+                "name": p.name,
+                "description": p.description,
+                "defaults": {
+                    "users": p.default_users,
+                    "teams": p.default_teams,
+                    "projects": p.default_projects,
+                    "incidents": p.default_incidents,
+                    "candidates": p.default_candidates,
+                },
+            }
+            for p in sorted(PROFILES.values(), key=lambda pr: pr.name)
+        ]
+        _write_payload(args.output, profiles_payload)
+        return 0
+
+    elif args.command == "packs" and args.packs_command == "list":
+        packs_payload: list[dict[str, object]] = [_pack_info(pack) for pack in list_packs()]
+        _write_payload(args.output, packs_payload)
+        return 0
+
+    elif args.command == "packs" and args.packs_command == "apply":
+        pack = get_pack(args.name)
+        if pack is None:
+            print("Unknown pack (see `notion-synth packs list`).", file=sys.stderr)
+            return 2
+
+        db = connect(args.db)
+        before = _db_stats(db)
+
+        config = pack.to_config(company=args.company, seed=args.seed)
+        fixture = generate_fixture(config)
+        expected_inserted = {
+            "workspaces": len(fixture.workspaces),
+            "users": len(fixture.users),
+            "pages": len(fixture.pages),
+            "databases": len(fixture.databases),
+            "database_rows": len(fixture.database_rows),
+            "comments": len(fixture.comments),
+        }
+        pack_info = _pack_info(pack)
+
+        if args.dry_run:
+            _write_payload(
+                "-",
+                {
+                    "status": "preview",
+                    "pack": pack_info,
+                    "before": before,
+                    "after": before,
+                    "expected_inserted": expected_inserted,
+                },
+            )
+            return 0
+
+        if not args.confirm:
+            print("Refusing to apply pack without --confirm (or use --dry-run).", file=sys.stderr)
+            return 2
+
+        fixture_result = import_fixture(db, fixture, mode="replace")
+        after = _db_stats(db)
+        _write_payload(
+            "-",
+            {
+                "status": "ok",
+                "pack": pack_info,
+                "before": before,
+                "after": after,
+                "inserted": fixture_result.inserted,
+            },
+        )
         return 0
 
     elif args.command == "roster" and args.roster_command == "generate":
@@ -454,12 +565,7 @@ def _config_from_args(args: argparse.Namespace) -> SyntheticWorkspaceConfig:
 
 
 def _write_fixture(output_path: str, fixture: Fixture) -> None:
-    payload = json.dumps(fixture.model_dump(by_alias=True), indent=2)
-    if output_path == "-":
-        print(payload)
-        return
-    path = Path(output_path)
-    path.write_text(payload)
+    _write_payload(output_path, fixture.model_dump(by_alias=True))
 
 
 def _load_fixture(path: str) -> Fixture:
@@ -468,9 +574,7 @@ def _load_fixture(path: str) -> Fixture:
 
 
 def _write_blueprint(output_path: str, blueprint: Blueprint) -> None:
-    payload = json.dumps(blueprint.model_dump(), indent=2)
-    path = Path(output_path)
-    path.write_text(payload)
+    _write_payload(output_path, blueprint.model_dump())
 
 
 def _load_blueprint(path: str) -> Blueprint:
@@ -484,6 +588,51 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 def _hash_roster(path: str) -> str:
     return stable_hash(Path(path).read_text())
+
+
+def _write_payload(output_path: str, payload: object) -> None:
+    rendered = json.dumps(payload, indent=2)
+    if output_path == "-":
+        print(rendered)
+        return
+    Path(output_path).write_text(rendered)
+
+
+def _pack_info(pack: FixturePack) -> dict[str, object]:
+    return {
+        "name": pack.name,
+        "description": pack.description,
+        "profile": pack.profile,
+        "industry": pack.industry,
+        "default_company": pack.default_company,
+        "default_seed": pack.default_seed,
+        "counts": {
+            "users": pack.users,
+            "teams": pack.teams,
+            "projects": pack.projects,
+            "incidents": pack.incidents,
+            "candidates": pack.candidates,
+        },
+    }
+
+
+def _db_stats(db: Database) -> dict[str, object]:
+    workspaces = db.query_one("SELECT COUNT(*) AS count FROM workspaces")
+    users = db.query_one("SELECT COUNT(*) AS count FROM users")
+    pages = db.query_one("SELECT COUNT(*) AS count FROM pages")
+    databases = db.query_one("SELECT COUNT(*) AS count FROM databases")
+    database_rows = db.query_one("SELECT COUNT(*) AS count FROM database_rows")
+    comments = db.query_one("SELECT COUNT(*) AS count FROM comments")
+
+    return {
+        "db_path": db.path,
+        "workspaces": int(workspaces["count"]) if workspaces else 0,
+        "users": int(users["count"]) if users else 0,
+        "pages": int(pages["count"]) if pages else 0,
+        "databases": int(databases["count"]) if databases else 0,
+        "database_rows": int(database_rows["count"]) if database_rows else 0,
+        "comments": int(comments["count"]) if comments else 0,
+    }
 
 
 if __name__ == "__main__":
