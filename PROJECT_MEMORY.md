@@ -227,6 +227,8 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21859562994 --exit-status` (commit `e0388eb`)
 - CI (pass) on 2026-02-10:
   - `gh run watch 21859599119 --exit-status` (commit `02f0f62`)
+- CI (pass) on 2026-02-10:
+  - `gh run watch 21859632515 --exit-status` (commit `dba5e5d`)
 
 ## Mistakes And Fixes
 - 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.
