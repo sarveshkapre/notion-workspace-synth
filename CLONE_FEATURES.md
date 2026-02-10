@@ -7,16 +7,21 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P1: Expand synthetic data beyond engineering by adding at least 2 new generator profiles (e.g. sales/CS, marketing) and document the intent of each.
-- [ ] P1: Add CLI convenience commands around packs/profiles (e.g. `notion-synth packs list` + `notion-synth packs apply --db ...`) to reduce “many flags” friction.
+- [ ] P2: Expand synthetic data beyond engineering by adding at least 2 new generator profiles (e.g. sales/CS, marketing) and document the intent of each.
 - [ ] P2: Fixture “packs” v2: allow “scale” presets (small/medium/large) and support overrides (`--company`, `--seed`) while remaining deterministic.
 - [ ] P2: Add synthetic file attachments metadata (minimal shape, no blob hosting) to pages/comments to better match downstream client expectations.
-- [ ] P2: Add minimal Docker Compose healthcheck for the API container and document expected startup/seed behavior.
 - [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy) with a strict “reject unknown fields” mode.
 - [ ] P3: Add richer search (optional) beyond pages: database rows and comments, with best-effort FTS fallback behavior.
-- [ ] P3: Add a small “demo script” smoke path in `scripts/` that starts the server, applies a pack, and hits 3-5 core endpoints end-to-end.
 
 ## Implemented
+- [x] 2026-02-10: Add CLI `packs` commands (`notion-synth packs list`, `notion-synth packs apply`) that operate on the local DB without running the API server (with `--dry-run` preview + `--confirm` guard).
+  Evidence: `src/notion_synth/cli.py`, `tests/test_cli_packs_profiles.py`, `README.md`.
+- [x] 2026-02-10: Add CLI discoverability for generator profiles (`notion-synth profiles list`) and document recommended pack/profile usage in README.
+  Evidence: `src/notion_synth/cli.py`, `tests/test_cli_packs_profiles.py`, `README.md`.
+- [x] 2026-02-10: Add a runnable demo smoke script (`make smoke`) that starts the server, applies a pack, and hits core endpoints end-to-end.
+  Evidence: `scripts/demo_smoke.py`, `Makefile`, `make smoke`.
+- [x] 2026-02-10: Document Docker Compose healthcheck and first-run seeding expectations.
+  Evidence: `docker-compose.yml`, `README.md`.
 - [x] 2026-02-09: Add fixture packs: `GET /packs` plus admin-gated `POST /admin/apply-pack` (supports `dry_run=true` and `confirm=true`) to generate + replace the local DB with a realistic preset dataset.
   Evidence: `src/notion_synth/packs.py`, `src/notion_synth/routes.py`, `tests/test_packs.py`, smoke curl.
 - [x] 2026-02-09: Add `X-Request-Id` header on all responses, plus opt-in structured error responses (via `Accept: application/vnd.notion-synth.error+json` or `?error_format=structured`) without breaking default FastAPI error shapes.

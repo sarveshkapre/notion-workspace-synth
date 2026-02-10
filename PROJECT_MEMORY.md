@@ -140,6 +140,14 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Trust: `local`
 - Confidence: `high`
 
+### 2026-02-10: Add CLI packs/profiles commands + local smoke script
+- Decision: add CLI subcommands for discoverability and local dataset resets: `notion-synth profiles list`, `notion-synth packs list`, and `notion-synth packs apply` (with `--dry-run` preview and `--confirm` guard), plus a runnable end-to-end smoke script (`make smoke`).
+- Why: reduces “many flags” friction, improves safe local resets without needing the admin HTTP endpoint, and provides a stable smoke verification path for maintainers.
+- Evidence: `src/notion_synth/cli.py`, `tests/test_cli_packs_profiles.py`, `scripts/demo_smoke.py`, `Makefile`, `README.md`.
+- Commit: (fill after commit)
+- Trust: `local`
+- Confidence: `high`
+
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
 - `make check` (pass) on 2026-02-09 (pagination headers).
@@ -208,6 +216,9 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21842492706 --exit-status` (commit `e37f1c2`)
 - Docker Compose verification (fail) on 2026-02-09:
   - `docker compose config -q` -> `command not found: docker` (Docker not available in this environment)
+- `make check` (pass) on 2026-02-10.
+- `make security` (pass) on 2026-02-10.
+- `make smoke` (pass) on 2026-02-10.
 
 ## Mistakes And Fixes
 - 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.
@@ -220,3 +231,8 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - Prevention rule: prefer bounded `fetch-depth` values that are sufficient for scanners, and rerun when failures are clearly infrastructure (HTTP 5xx).
   - Evidence: `gh run view 21833223544 --log-failed` (5xx on checkout), `.github/workflows/ci.yml` (`fetch-depth: 50`), `gh run watch 21833968192 --exit-status` (pass).
   - Trust: `external` (failure), `local` (workflow change)
+- 2026-02-10: `make security` failed due to Bandit B608 on dynamic SQL construction in CLI DB stats; fixed by using static count queries.
+  - Root cause: f-string SQL for table names triggered Bandit (even though the tables were internal and fixed).
+  - Prevention rule: avoid dynamic SQL for identifiers in runtime code; keep queries static or fully validated.
+  - Evidence: `src/notion_synth/cli.py`, `make security`.
+  - Trust: `local`
