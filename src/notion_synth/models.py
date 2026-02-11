@@ -3,6 +3,22 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class Attachment(BaseModel):
+    id: str
+    name: str
+    mime_type: str
+    size_bytes: int = Field(ge=0)
+    external_url: str | None = None
+
+
+class AttachmentInput(BaseModel):
+    id: str | None = None
+    name: str
+    mime_type: str
+    size_bytes: int = Field(ge=0)
+    external_url: str | None = None
+
+
 class Stats(BaseModel):
     db_path: str
     workspaces: int
@@ -32,6 +48,7 @@ class Page(BaseModel):
     workspace_id: str
     title: str
     content: dict[str, Any]
+    attachments: list[Attachment] = Field(default_factory=list)
     parent_type: str
     parent_id: str
     created_at: str
@@ -62,6 +79,7 @@ class Comment(BaseModel):
     page_id: str
     author_id: str
     body: str
+    attachments: list[Attachment] = Field(default_factory=list)
     created_at: str
 
 
@@ -73,6 +91,14 @@ class PageCreate(BaseModel):
                     "workspace_id": "ws_demo",
                     "title": "Sprint Notes",
                     "content": {"type": "doc", "blocks": ["Kickoff", "Decisions", "Next steps"]},
+                    "attachments": [
+                        {
+                            "name": "sprint-outline.pdf",
+                            "mime_type": "application/pdf",
+                            "size_bytes": 98231,
+                            "external_url": "https://files.example.com/sprint-outline.pdf",
+                        }
+                    ],
                     "parent_type": "workspace",
                     "parent_id": "ws_demo",
                 }
@@ -83,6 +109,7 @@ class PageCreate(BaseModel):
     workspace_id: str
     title: str
     content: dict[str, Any]
+    attachments: list[AttachmentInput] = Field(default_factory=list)
     parent_type: str
     parent_id: str
 
@@ -94,6 +121,13 @@ class PageUpdate(BaseModel):
                 {
                     "title": "Sprint Notes v2",
                     "content": {"type": "doc", "blocks": ["Updated kickoff notes"]},
+                    "attachments": [
+                        {
+                            "name": "sprint-outline-v2.pdf",
+                            "mime_type": "application/pdf",
+                            "size_bytes": 103551,
+                        }
+                    ],
                 }
             ]
         }
@@ -101,6 +135,7 @@ class PageUpdate(BaseModel):
 
     title: str | None = None
     content: dict[str, Any] | None = None
+    attachments: list[AttachmentInput] | None = None
 
 
 class DatabaseCreate(BaseModel):
@@ -168,13 +203,27 @@ class DatabaseRowUpdate(BaseModel):
 class CommentCreate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
-            "examples": [{"page_id": "page_home", "author_id": "user_alex", "body": "Kickoff complete."}]
+            "examples": [
+                {
+                    "page_id": "page_home",
+                    "author_id": "user_alex",
+                    "body": "Kickoff complete.",
+                    "attachments": [
+                        {
+                            "name": "kickoff-notes.txt",
+                            "mime_type": "text/plain",
+                            "size_bytes": 2123,
+                        }
+                    ],
+                }
+            ]
         }
     )
 
     page_id: str
     author_id: str
     body: str
+    attachments: list[AttachmentInput] = Field(default_factory=list)
 
 
 class WorkspaceCreate(BaseModel):

@@ -6,7 +6,16 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from notion_synth.models import Comment, Database, DatabaseRow, Fixture, Page, User, Workspace
+from notion_synth.models import (
+    Attachment,
+    Comment,
+    Database,
+    DatabaseRow,
+    Fixture,
+    Page,
+    User,
+    Workspace,
+)
 
 
 @dataclass(frozen=True)
@@ -251,6 +260,7 @@ def _build_pages(
                 workspace_id=workspace_id,
                 title=title,
                 content={"type": "doc", "blocks": blocks},
+                attachments=_build_page_attachments(title, index, rng),
                 parent_type="workspace",
                 parent_id=workspace_id,
                 created_at=_ts(base_time, 200 + index),
@@ -275,6 +285,7 @@ def _build_pages(
                     ],
                     "owner": rng.choice(users).name if users else "TBD",
                 },
+                attachments=_build_page_attachments(team, 100 + index, rng),
                 parent_type="workspace",
                 parent_id=workspace_id,
                 created_at=_ts(base_time, 240 + index),
@@ -436,10 +447,49 @@ def _build_comments(
                     page_id=page.id,
                     author_id=rng.choice(users).id,
                     body=rng.choice(notes),
+                    attachments=_build_comment_attachments(index, rng),
                     created_at=_ts(base_time, 600 + index),
                 )
             )
     return comments
+
+
+def _build_page_attachments(title: str, index: int, rng: random.Random) -> list[Attachment]:
+    if index % 2 != 0:
+        return []
+    extension, mime_type = rng.choice(
+        [
+            ("pdf", "application/pdf"),
+            ("png", "image/png"),
+            ("csv", "text/csv"),
+            ("txt", "text/plain"),
+        ]
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "page"
+    filename = f"{slug}-asset.{extension}"
+    return [
+        Attachment(
+            id=_rand_id("att", rng),
+            name=filename,
+            mime_type=mime_type,
+            size_bytes=rng.randint(8_000, 1_800_000),  # nosec B311
+            external_url=f"https://files.synth.local/{filename}",
+        )
+    ]
+
+
+def _build_comment_attachments(index: int, rng: random.Random) -> list[Attachment]:
+    if index % 4 != 0:
+        return []
+    return [
+        Attachment(
+            id=_rand_id("att", rng),
+            name=f"comment-context-{index + 1}.md",
+            mime_type="text/markdown",
+            size_bytes=rng.randint(300, 3_500),  # nosec B311
+            external_url=None,
+        )
+    ]
 
 
 def _rand_id(prefix: str, rng: random.Random) -> str:

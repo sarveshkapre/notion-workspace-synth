@@ -34,7 +34,14 @@ def export_fixture(db: Database) -> Fixture:
         workspaces=[Workspace(**dict(row)) for row in rows_workspaces],
         users=[User(**dict(row)) for row in rows_users],
         pages=[
-            Page(**{**dict(row), "content": _parse_json(row["content"])}) for row in rows_pages
+            Page(
+                **{
+                    **dict(row),
+                    "content": _parse_json(row["content"]),
+                    "attachments": _parse_json(row["attachments_json"]),
+                }
+            )
+            for row in rows_pages
         ],
         databases=[
             DatabaseModel(**{**dict(row), "schema": _parse_json(row["schema_json"])})
@@ -44,7 +51,10 @@ def export_fixture(db: Database) -> Fixture:
             DatabaseRow(**{**dict(row), "properties": _parse_json(row["properties_json"])})
             for row in rows_database_rows
         ],
-        comments=[Comment(**dict(row)) for row in rows_comments],
+        comments=[
+            Comment(**{**dict(row), "attachments": _parse_json(row["attachments_json"])})
+            for row in rows_comments
+        ],
     )
 
 
@@ -110,12 +120,13 @@ def import_fixture(db: Database, payload: Fixture, mode: str = "replace") -> Fix
                 workspace_id,
                 title,
                 content,
+                attachments_json,
                 parent_type,
                 parent_id,
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             if mode == "replace"
             else """
@@ -124,16 +135,18 @@ def import_fixture(db: Database, payload: Fixture, mode: str = "replace") -> Fix
                 workspace_id,
                 title,
                 content,
+                attachments_json,
                 parent_type,
                 parent_id,
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 workspace_id = excluded.workspace_id,
                 title = excluded.title,
                 content = excluded.content,
+                attachments_json = excluded.attachments_json,
                 parent_type = excluded.parent_type,
                 parent_id = excluded.parent_id,
                 created_at = excluded.created_at,
@@ -148,6 +161,7 @@ def import_fixture(db: Database, payload: Fixture, mode: str = "replace") -> Fix
                     p.workspace_id,
                     p.title,
                     json.dumps(p.content),
+                    json.dumps([attachment.model_dump() for attachment in p.attachments]),
                     p.parent_type,
                     p.parent_id,
                     p.created_at,
@@ -223,20 +237,35 @@ def import_fixture(db: Database, payload: Fixture, mode: str = "replace") -> Fix
         inserted["database_rows"] = len(payload.database_rows)
 
         comments_query = (
-            "INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)"
+            """
+            INSERT INTO comments (id, page_id, author_id, body, attachments_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """
             if mode == "replace"
             else """
-            INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)
+            INSERT INTO comments (id, page_id, author_id, body, attachments_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 page_id = excluded.page_id,
                 author_id = excluded.author_id,
                 body = excluded.body,
+                attachments_json = excluded.attachments_json,
                 created_at = excluded.created_at
             """
         )
         cursor.executemany(
             comments_query,
-            [(c.id, c.page_id, c.author_id, c.body, c.created_at) for c in payload.comments],
+            [
+                (
+                    c.id,
+                    c.page_id,
+                    c.author_id,
+                    c.body,
+                    json.dumps([attachment.model_dump() for attachment in c.attachments]),
+                    c.created_at,
+                )
+                for c in payload.comments
+            ],
         )
         inserted["comments"] = len(payload.comments)
 

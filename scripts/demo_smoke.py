@@ -56,20 +56,48 @@ def main() -> int:
         workspaces = _json_request("GET", f"{base_url}/workspaces")
         ws_id = workspaces[0]["id"]
 
-        _json_request(
+        created_page = _json_request(
             "POST",
             f"{base_url}/pages",
             {
                 "workspace_id": ws_id,
                 "title": "Smoke Page",
                 "content": {"type": "doc", "blocks": ["hello"]},
+                "attachments": [
+                    {"name": "smoke-plan.txt", "mime_type": "text/plain", "size_bytes": 321}
+                ],
                 "parent_type": "workspace",
                 "parent_id": ws_id,
             },
         )
+        page_id = str(created_page["id"])
 
         search = _json_request("GET", f"{base_url}/search/pages?q=Smoke")
         assert any("Smoke" in p.get("title", "") for p in search)
+
+        users = _json_request("GET", f"{base_url}/users?workspace_id={ws_id}")
+        assert users
+        author_id = str(users[0]["id"])
+
+        comment = _json_request(
+            "POST",
+            f"{base_url}/comments",
+            {
+                "page_id": page_id,
+                "author_id": author_id,
+                "body": "Smoke comment note",
+                "attachments": [
+                    {"name": "smoke-comment.md", "mime_type": "text/markdown", "size_bytes": 144}
+                ],
+            },
+        )
+        assert str(comment.get("id", "")).startswith("comment_")
+
+        comment_search = _json_request("GET", f"{base_url}/search/comments?q=Smoke")
+        assert any("Smoke" in c.get("body", "") for c in comment_search)
+
+        row_search = _json_request("GET", f"{base_url}/search/rows?q=Project&property_name=Name")
+        assert row_search
         return 0
     except Exception:
         raise

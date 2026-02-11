@@ -4,6 +4,7 @@ Synthetic Notion-like workspace API with seeded demo org. Use it to generate rea
 
 ## Features
 - Workspaces, users, pages, databases, database rows, comments
+- Attachment metadata on pages/comments (file name, mime type, size, optional external URL; no blob hosting)
 - Deterministic demo org seeding on first run
 - Enterprise-grade synthetic workspace generator for engineering orgs
 - Simple REST API with JSON payloads
@@ -25,6 +26,8 @@ API docs:
 Search:
 ```bash
 curl "http://localhost:8000/search/pages?q=Welcome"
+curl "http://localhost:8000/search/comments?q=Kickoff"
+curl "http://localhost:8000/search/rows?q=Done&property_name=Status"
 ```
 
 ## Example
@@ -43,7 +46,7 @@ Common API flow (create + query + delete):
 # 1) Create a page
 curl -sS -X POST http://localhost:8000/pages \
   -H "content-type: application/json" \
-  -d '{"workspace_id":"ws_demo","title":"Sprint Notes","content":{"blocks":["Kickoff"]},"parent_type":"workspace","parent_id":"ws_demo"}'
+  -d '{"workspace_id":"ws_demo","title":"Sprint Notes","content":{"blocks":["Kickoff"]},"attachments":[{"name":"sprint-outline.pdf","mime_type":"application/pdf","size_bytes":90213}],"parent_type":"workspace","parent_id":"ws_demo"}'
 # -> {"id":"page_...","title":"Sprint Notes",...}
 
 # 2) Create a database and row
@@ -60,6 +63,9 @@ curl -sS -X POST "http://localhost:8000/databases/$DB_ID/rows" \
 curl -sS "http://localhost:8000/databases/$DB_ID/rows?property_name=Status&property_value_contains=Progress"
 
 # 4) Delete comment or user (user delete cascades authored comments)
+curl -sS -X POST http://localhost:8000/comments \
+  -H "content-type: application/json" \
+  -d '{"page_id":"page_home","author_id":"user_alex","body":"Added context","attachments":[{"name":"context.md","mime_type":"text/markdown","size_bytes":512}]}'
 curl -X DELETE http://localhost:8000/comments/comment_1
 curl -X DELETE http://localhost:8000/users/user_alex
 ```

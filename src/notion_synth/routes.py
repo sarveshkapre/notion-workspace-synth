@@ -13,6 +13,8 @@ from notion_synth.fixtures import import_fixture as import_fixture_payload
 from notion_synth.generator import generate_fixture
 from notion_synth.models import (
     AdminResetResult,
+    Attachment,
+    AttachmentInput,
     Comment,
     CommentCreate,
     DatabaseCreate,
@@ -93,6 +95,43 @@ def _set_pagination_headers(
 
 def _parse_json(value: str) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(value))
+
+
+def _parse_attachments_json(value: str) -> list[Attachment]:
+    raw = cast(list[dict[str, Any]], json.loads(value))
+    return [Attachment(**item) for item in raw]
+
+
+def _attachments_to_json(attachments: list[Attachment]) -> str:
+    return json.dumps([attachment.model_dump() for attachment in attachments])
+
+
+def _normalize_attachments(inputs: list[AttachmentInput]) -> list[Attachment]:
+    normalized: list[Attachment] = []
+    for item in inputs:
+        normalized.append(
+            Attachment(
+                id=item.id or new_id("att"),
+                name=item.name,
+                mime_type=item.mime_type,
+                size_bytes=item.size_bytes,
+                external_url=item.external_url,
+            )
+        )
+    return normalized
+
+
+def _page_from_row(row: Any) -> Page:
+    data = dict(row)
+    data["content"] = _parse_json(data["content"])
+    data["attachments"] = _parse_attachments_json(data.get("attachments_json", "[]"))
+    return Page(**data)
+
+
+def _comment_from_row(row: Any) -> Comment:
+    data = dict(row)
+    data["attachments"] = _parse_attachments_json(data.get("attachments_json", "[]"))
+    return Comment(**data)
 
 
 def _json_path_for_property(property_name: str) -> str:
@@ -775,7 +814,7 @@ def list_pages(
         rows = rows[:limit]
         _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
     return [
-        Page(**{**dict(row), "content": _parse_json(row["content"])})
+        _page_from_row(row)
         for row in rows
     ]
 
@@ -786,9 +825,7 @@ def get_page(page_id: str, request: Request) -> Page:
     row = db.query_one("SELECT * FROM pages WHERE id = ?", [page_id])
     if row is None:
         raise HTTPException(status_code=404, detail="Page not found")
-    data = dict(row)
-    data["content"] = _parse_json(row["content"])
-    return Page(**data)
+    return _page_from_row(row)
 
 
 @router.post("/pages", response_model=Page, status_code=201)
@@ -800,6 +837,7 @@ def create_page(payload: PageCreate, request: Request) -> Page:
 
     now = _utc_now()
     page_id = new_id("page")
+    normalized_attachments = _normalize_attachments(payload.attachments)
     db.execute(
         """
         INSERT INTO pages (
@@ -807,18 +845,20 @@ def create_page(payload: PageCreate, request: Request) -> Page:
             workspace_id,
             title,
             content,
+            attachments_json,
             parent_type,
             parent_id,
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             page_id,
             payload.workspace_id,
             payload.title,
             json.dumps(payload.content),
+            _attachments_to_json(normalized_attachments),
             payload.parent_type,
             payload.parent_id,
             now,
@@ -830,6 +870,7 @@ def create_page(payload: PageCreate, request: Request) -> Page:
         workspace_id=payload.workspace_id,
         title=payload.title,
         content=payload.content,
+        attachments=normalized_attachments,
         parent_type=payload.parent_type,
         parent_id=payload.parent_id,
         created_at=now,
@@ -848,15 +889,26 @@ def update_page(page_id: str, payload: PageUpdate, request: Request) -> Page:
         updated["title"] = payload.title
     if payload.content is not None:
         updated["content"] = json.dumps(payload.content)
+    if payload.attachments is not None:
+        normalized_attachments = _normalize_attachments(payload.attachments)
+        updated["attachments_json"] = _attachments_to_json(normalized_attachments)
     updated["updated_at"] = _utc_now()
     db.execute(
         """
-        UPDATE pages SET title = ?, content = ?, updated_at = ? WHERE id = ?
+        UPDATE pages SET title = ?, content = ?, attachments_json = ?, updated_at = ? WHERE id = ?
         """,
-        [updated["title"], updated["content"], updated["updated_at"], page_id],
+        [
+            updated["title"],
+            updated["content"],
+            updated.get("attachments_json", "[]"),
+            updated["updated_at"],
+            page_id,
+        ],
     )
-    updated["content"] = _parse_json(updated["content"])
-    return Page(**updated)
+    row = db.query_one("SELECT * FROM pages WHERE id = ?", [page_id])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return _page_from_row(row)
 
 
 @router.delete("/pages/{page_id}", status_code=204)
@@ -958,7 +1010,144 @@ def search_pages(
         _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
 
     return [
-        Page(**{**dict(row), "content": _parse_json(row["content"])})
+        _page_from_row(row)
+        for row in rows
+    ]
+
+
+@router.get("/search/comments", response_model=list[Comment], tags=["search"])
+def search_comments(
+    request: Request,
+    response: Response,
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Search query (matches comment body and attachment metadata).",
+    ),
+    workspace_id: str | None = None,
+    page_id: str | None = None,
+    author_id: str | None = None,
+    limit: int = Query(50),
+    offset: int = Query(0),
+    include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
+) -> list[Comment]:
+    db = _get_db(request)
+    limit, offset = _limit_offset(limit, offset)
+    like = f"%{q}%"
+
+    conditions: list[str] = ["(c.body LIKE ? OR c.attachments_json LIKE ?)"]
+    params: list[Any] = [like, like]
+    if workspace_id:
+        conditions.append("p.workspace_id = ?")
+        params.append(workspace_id)
+    if page_id:
+        conditions.append("c.page_id = ?")
+        params.append(page_id)
+    if author_id:
+        conditions.append("c.author_id = ?")
+        params.append(author_id)
+    where = f"WHERE {' AND '.join(conditions)}"
+
+    if include_total:
+        count_query = f"""
+        SELECT COUNT(*) AS count
+        FROM comments c
+        JOIN pages p ON p.id = c.page_id
+        {where}
+        """  # nosec B608
+        count_row = db.query_one(count_query, params)
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+    query_limit = limit + 1 if include_pagination else limit
+    query = f"""
+    SELECT c.*
+    FROM comments c
+    JOIN pages p ON p.id = c.page_id
+    {where}
+    ORDER BY c.created_at
+    LIMIT ? OFFSET ?
+    """  # nosec B608
+    rows = db.query_all(query, [*params, query_limit, offset])
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
+    return [_comment_from_row(row) for row in rows]
+
+
+@router.get("/search/rows", response_model=list[DatabaseRow], tags=["search"])
+def search_rows(
+    request: Request,
+    response: Response,
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Search query (matches row property JSON or a specific property value).",
+    ),
+    workspace_id: str | None = None,
+    database_id: str | None = None,
+    property_name: str | None = Query(default=None, min_length=1),
+    limit: int = Query(50),
+    offset: int = Query(0),
+    include_total: bool = Query(False),
+    include_pagination: bool = Query(
+        False,
+        description="When true, include pagination metadata via response headers.",
+    ),
+) -> list[DatabaseRow]:
+    db = _get_db(request)
+    limit, offset = _limit_offset(limit, offset)
+
+    conditions: list[str] = []
+    params: list[Any] = []
+    if property_name:
+        conditions.append("CAST(json_extract(r.properties_json, ?) AS TEXT) LIKE ?")
+        params.extend([_json_path_for_property(property_name), f"%{q}%"])
+    else:
+        conditions.append("r.properties_json LIKE ?")
+        params.append(f"%{q}%")
+
+    if workspace_id:
+        conditions.append("d.workspace_id = ?")
+        params.append(workspace_id)
+    if database_id:
+        conditions.append("r.database_id = ?")
+        params.append(database_id)
+    where = f"WHERE {' AND '.join(conditions)}"
+
+    if include_total:
+        count_query = f"""
+        SELECT COUNT(*) AS count
+        FROM database_rows r
+        JOIN databases d ON d.id = r.database_id
+        {where}
+        """  # nosec B608
+        count_row = db.query_one(count_query, params)
+        _set_total_header(response, int(count_row["count"]) if count_row else 0)
+
+    query_limit = limit + 1 if include_pagination else limit
+    query = f"""
+    SELECT r.*
+    FROM database_rows r
+    JOIN databases d ON d.id = r.database_id
+    {where}
+    ORDER BY r.created_at
+    LIMIT ? OFFSET ?
+    """  # nosec B608
+    rows = db.query_all(query, [*params, query_limit, offset])
+    if include_pagination:
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
+
+    return [
+        DatabaseRow(**{**dict(row), "properties": _parse_json(row["properties_json"])})
         for row in rows
     ]
 
@@ -1291,7 +1480,7 @@ def list_comments(
         has_more = len(rows) > limit
         rows = rows[:limit]
         _set_pagination_headers(request, response, limit=limit, offset=offset, has_more=has_more)
-    return [Comment(**dict(row)) for row in rows]
+    return [_comment_from_row(row) for row in rows]
 
 
 @router.get("/comments/{comment_id}", response_model=Comment)
@@ -1300,7 +1489,7 @@ def get_comment(comment_id: str, request: Request) -> Comment:
     row = db.query_one("SELECT * FROM comments WHERE id = ?", [comment_id])
     if row is None:
         raise HTTPException(status_code=404, detail="Comment not found")
-    return Comment(**dict(row))
+    return _comment_from_row(row)
 
 
 @router.post("/comments", response_model=Comment, status_code=201)
@@ -1315,18 +1504,27 @@ def create_comment(payload: CommentCreate, request: Request) -> Comment:
 
     now = _utc_now()
     comment_id = new_id("comment")
+    normalized_attachments = _normalize_attachments(payload.attachments)
     db.execute(
         """
-        INSERT INTO comments (id, page_id, author_id, body, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO comments (id, page_id, author_id, body, attachments_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        [comment_id, payload.page_id, payload.author_id, payload.body, now],
+        [
+            comment_id,
+            payload.page_id,
+            payload.author_id,
+            payload.body,
+            _attachments_to_json(normalized_attachments),
+            now,
+        ],
     )
     return Comment(
         id=comment_id,
         page_id=payload.page_id,
         author_id=payload.author_id,
         body=payload.body,
+        attachments=normalized_attachments,
         created_at=now,
     )
 

@@ -13,6 +13,8 @@ def test_generate_fixture_is_deterministic() -> None:
     assert fixture_a.workspaces[0].id == fixture_b.workspaces[0].id
     assert fixture_a.users[0].email == fixture_b.users[0].email
     assert fixture_a.pages[0].title == fixture_b.pages[0].title
+    assert fixture_a.pages[0].attachments == fixture_b.pages[0].attachments
+    assert fixture_a.comments[0].attachments == fixture_b.comments[0].attachments
 
 
 def test_import_generated_fixture_replaces_seed_data() -> None:

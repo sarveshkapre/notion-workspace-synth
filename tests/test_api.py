@@ -22,6 +22,7 @@ def test_seeded_pages() -> None:
     pages = response.json()
     assert len(pages) >= 1
     assert pages[0]["id"]
+    assert isinstance(pages[0]["attachments"], list)
 
 
 def test_create_workspace_and_user() -> None:
@@ -166,6 +167,15 @@ def test_create_page() -> None:
         "workspace_id": "ws_demo",
         "title": "Notes",
         "content": {"blocks": ["Line 1", "Line 2"]},
+        "attachments": [
+            {"name": "roadmap.pdf", "mime_type": "application/pdf", "size_bytes": 1203},
+            {
+                "id": "att_manual_keep",
+                "name": "capture.png",
+                "mime_type": "image/png",
+                "size_bytes": 8821,
+            },
+        ],
         "parent_type": "workspace",
         "parent_id": "ws_demo",
     }
@@ -174,6 +184,13 @@ def test_create_page() -> None:
     body = response.json()
     assert body["title"] == "Notes"
     assert body["content"]["blocks"][0] == "Line 1"
+    assert len(body["attachments"]) == 2
+    assert body["attachments"][0]["id"].startswith("att_")
+    assert body["attachments"][1]["id"] == "att_manual_keep"
+
+    fetched = client.get(f"/pages/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["attachments"][0]["name"] == "roadmap.pdf"
 
 
 def test_homepage_html() -> None:
@@ -237,6 +254,34 @@ def test_search_pages() -> None:
     assert response.status_code == 200
     pages = response.json()
     assert [page["id"] for page in pages] == ["page_home"]
+
+
+def test_search_comments_and_rows() -> None:
+    client = _client()
+
+    comment_search = client.get("/search/comments?q=Kickoff&include_total=true")
+    assert comment_search.status_code == 200
+    assert comment_search.headers.get("x-total-count") == "1"
+    comments = comment_search.json()
+    assert [comment["id"] for comment in comments] == ["comment_1"]
+
+    attachment_search = client.get("/search/comments?q=kickoff-summary")
+    assert attachment_search.status_code == 200
+    assert [comment["id"] for comment in attachment_search.json()] == ["comment_1"]
+
+    row_search = client.get("/search/rows?q=Prototype&include_total=true")
+    assert row_search.status_code == 200
+    assert row_search.headers.get("x-total-count") == "1"
+    assert [row["id"] for row in row_search.json()] == ["row_1"]
+
+    property_search = client.get("/search/rows?q=Done&property_name=Status")
+    assert property_search.status_code == 200
+    assert [row["id"] for row in property_search.json()] == ["row_2"]
+
+    paged = client.get("/search/comments?q=review&limit=1&offset=0&include_pagination=true")
+    assert paged.status_code == 200
+    assert paged.headers.get("x-limit") == "1"
+    assert paged.headers.get("x-offset") == "0"
 
 
 def test_admin_reset_requires_env_guard(monkeypatch) -> None:
@@ -311,6 +356,9 @@ def test_fixtures_export_import_roundtrip() -> None:
     assert stats["workspaces"] == body["inserted"]["workspaces"]
     assert stats["pages"] == body["inserted"]["pages"]
     assert stats["databases"] == body["inserted"]["databases"]
+    imported_home = client_b.get("/pages/page_home")
+    assert imported_home.status_code == 200
+    assert imported_home.json()["attachments"][0]["name"] == "workspace-handbook.pdf"
 
     # Merge should not delete existing objects.
     client_c = TestClient(create_app(":memory:"))
@@ -361,7 +409,18 @@ def test_comment_get_and_delete() -> None:
     client = _client()
     created = client.post(
         "/comments",
-        json={"page_id": "page_home", "author_id": "user_bianca", "body": "Ship it."},
+        json={
+            "page_id": "page_home",
+            "author_id": "user_bianca",
+            "body": "Ship it.",
+            "attachments": [
+                {
+                    "name": "feedback.md",
+                    "mime_type": "text/markdown",
+                    "size_bytes": 533,
+                }
+            ],
+        },
     )
     assert created.status_code == 201
     comment_id = created.json()["id"]
@@ -369,6 +428,8 @@ def test_comment_get_and_delete() -> None:
     fetched = client.get(f"/comments/{comment_id}")
     assert fetched.status_code == 200
     assert fetched.json()["body"] == "Ship it."
+    assert fetched.json()["attachments"][0]["name"] == "feedback.md"
+    assert fetched.json()["attachments"][0]["id"].startswith("att_")
 
     deleted = client.delete(f"/comments/{comment_id}")
     assert deleted.status_code == 204

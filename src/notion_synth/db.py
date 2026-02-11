@@ -92,6 +92,7 @@ def _init_schema(db: Database) -> None:
             workspace_id TEXT NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
+            attachments_json TEXT NOT NULL DEFAULT '[]',
             parent_type TEXT NOT NULL,
             parent_id TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -132,12 +133,23 @@ def _init_schema(db: Database) -> None:
             page_id TEXT NOT NULL,
             author_id TEXT NOT NULL,
             body TEXT NOT NULL,
+            attachments_json TEXT NOT NULL DEFAULT '[]',
             created_at TEXT NOT NULL,
             FOREIGN KEY (page_id) REFERENCES pages(id),
             FOREIGN KEY (author_id) REFERENCES users(id)
         )
         """
     )
+
+    pages_columns = db.query_all("PRAGMA table_info(pages)")
+    if not any(col["name"] == "attachments_json" for col in pages_columns):
+        with suppress(sqlite3.OperationalError):
+            db.execute("ALTER TABLE pages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'")
+
+    comments_columns = db.query_all("PRAGMA table_info(comments)")
+    if not any(col["name"] == "attachments_json" for col in comments_columns):
+        with suppress(sqlite3.OperationalError):
+            db.execute("ALTER TABLE comments ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'")
 
     # Lightweight indexes for common list/filter paths. Safe to run on every start.
     db.execute(
@@ -272,6 +284,17 @@ def seed_demo(db: Database, *, force: bool = False) -> None:
                 workspace_id,
                 "Welcome to Synth",
                 json.dumps({"type": "doc", "blocks": ["Getting started", "Team goals"]}),
+                json.dumps(
+                    [
+                        {
+                            "id": "att_seed_home_handbook",
+                            "name": "workspace-handbook.pdf",
+                            "mime_type": "application/pdf",
+                            "size_bytes": 148221,
+                            "external_url": "https://files.example.com/workspace-handbook.pdf",
+                        }
+                    ]
+                ),
                 "workspace",
                 workspace_id,
                 now,
@@ -282,6 +305,7 @@ def seed_demo(db: Database, *, force: bool = False) -> None:
                 workspace_id,
                 "Project Tracker",
                 json.dumps({"type": "doc", "blocks": ["Milestones", "Risks", "Notes"]}),
+                "[]",
                 "workspace",
                 workspace_id,
                 now,
@@ -295,12 +319,13 @@ def seed_demo(db: Database, *, force: bool = False) -> None:
                 workspace_id,
                 title,
                 content,
+                attachments_json,
                 parent_type,
                 parent_id,
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             pages,
         )
@@ -369,11 +394,31 @@ def seed_demo(db: Database, *, force: bool = False) -> None:
         )
 
         comments = [
-            ("comment_1", "page_home", "user_alex", "Kickoff complete.", now),
-            ("comment_2", "page_project", "user_bianca", "Risk review scheduled.", now),
+            (
+                "comment_1",
+                "page_home",
+                "user_alex",
+                "Kickoff complete.",
+                json.dumps(
+                    [
+                        {
+                            "id": "att_seed_comment_kickoff",
+                            "name": "kickoff-summary.txt",
+                            "mime_type": "text/plain",
+                            "size_bytes": 2201,
+                            "external_url": None,
+                        }
+                    ]
+                ),
+                now,
+            ),
+            ("comment_2", "page_project", "user_bianca", "Risk review scheduled.", "[]", now),
         ]
         cursor.executemany(
-            "INSERT INTO comments (id, page_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO comments (id, page_id, author_id, body, attachments_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
             comments,
         )
         conn.commit()
