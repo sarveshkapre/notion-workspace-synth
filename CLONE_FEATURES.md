@@ -7,13 +7,44 @@
 - Gaps found during codebase exploration
 
 ## Candidate Features To Do
-- [ ] P2: Expand synthetic data beyond engineering by adding at least 2 new generator profiles (e.g. sales/CS, marketing) and document the intent of each.
-- [ ] P2: Fixture “packs” v2: allow “scale” presets (small/medium/large) and support overrides (`--company`, `--seed`) while remaining deterministic.
-- [ ] P2: Add synthetic file attachments metadata (minimal shape, no blob hosting) to pages/comments to better match downstream client expectations.
-- [ ] P3: Add ingest API for external fixtures (accept partial fixtures, validate, merge policy) with a strict “reject unknown fields” mode.
-- [ ] P3: Add richer search (optional) beyond pages: database rows and comments, with best-effort FTS fallback behavior.
+- [ ] P1: Add ingest API v2 for partial fixtures with strict unknown-field rejection mode and explicit merge conflict reporting.
+  Score: Impact 4 | Effort 4 | Strategic Fit 5 | Differentiation 3 | Risk 3 | Confidence 3
+- [ ] P1: Enforce payload size guardrails for large JSON blobs (`content`, row properties, comments) with clear 400 validation messages.
+  Score: Impact 4 | Effort 2 | Strategic Fit 5 | Differentiation 2 | Risk 2 | Confidence 4
+- [ ] P1: Add regression tests for FTS/unavailable-FTS fallback paths covering search correctness and stable ordering.
+  Score: Impact 3 | Effort 2 | Strategic Fit 4 | Differentiation 2 | Risk 1 | Confidence 4
+- [ ] P2: Expand synthetic data beyond engineering with `sales_cs` and `marketing` generator profiles and profile-specific databases/pages.
+  Score: Impact 4 | Effort 4 | Strategic Fit 4 | Differentiation 4 | Risk 3 | Confidence 3
+- [ ] P2: Fixture packs v2 with explicit scale presets (`small`/`medium`/`large`) and deterministic `--company`/`--seed` overrides in API + CLI docs.
+  Score: Impact 4 | Effort 3 | Strategic Fit 4 | Differentiation 3 | Risk 2 | Confidence 4
+- [ ] P2: Add optional audit log records for admin operations (`/admin/reset`, `/admin/apply-pack`) to improve demo traceability.
+  Score: Impact 3 | Effort 2 | Strategic Fit 4 | Differentiation 3 | Risk 2 | Confidence 4
+- [ ] P2: Add CI smoke job that runs `make smoke` to keep runnable demo path green in GitHub Actions.
+  Score: Impact 3 | Effort 2 | Strategic Fit 4 | Differentiation 2 | Risk 2 | Confidence 4
+- [ ] P2: Add command-level CLI tests for failure modes (missing `--confirm`, unknown pack/profile, bad import mode).
+  Score: Impact 3 | Effort 2 | Strategic Fit 4 | Differentiation 2 | Risk 1 | Confidence 5
+- [ ] P2: Add JSON expression indexes for frequent row-property exact-match filters and measure query improvements.
+  Score: Impact 3 | Effort 2 | Strategic Fit 4 | Differentiation 2 | Risk 2 | Confidence 3
+- [ ] P2: Add API docs page in `docs/` for search semantics and expected fallback behavior (FTS vs LIKE).
+  Score: Impact 3 | Effort 1 | Strategic Fit 3 | Differentiation 2 | Risk 1 | Confidence 5
+- [ ] P2: Add minimal rate-limit simulation mode for local clients (per-process token bucket) behind env guard for resilience testing.
+  Score: Impact 3 | Effort 3 | Strategic Fit 3 | Differentiation 4 | Risk 3 | Confidence 3
+- [ ] P3: Normalize repeated query-building logic into small reusable helpers to reduce drift between list endpoints.
+  Score: Impact 2 | Effort 2 | Strategic Fit 3 | Differentiation 1 | Risk 1 | Confidence 4
+- [ ] P3: Add focused benchmarks for list/search endpoints against small/medium/large packs and track results in docs.
+  Score: Impact 2 | Effort 3 | Strategic Fit 3 | Differentiation 2 | Risk 2 | Confidence 3
+- [ ] P3: Add SQLite pragmas doc matrix for demo-safe defaults (`busy_timeout`, WAL) and expected concurrency behavior.
+  Score: Impact 2 | Effort 1 | Strategic Fit 3 | Differentiation 1 | Risk 1 | Confidence 5
+- [ ] P3: Add OpenAPI examples for admin pack apply and fixture merge conflict responses.
+  Score: Impact 2 | Effort 1 | Strategic Fit 2 | Differentiation 1 | Risk 1 | Confidence 5
+- [ ] P3: Add release checklist automation for tagging + changelog consistency hints (dry-run only).
+  Score: Impact 2 | Effort 2 | Strategic Fit 3 | Differentiation 1 | Risk 2 | Confidence 4
 
 ## Implemented
+- [x] 2026-02-11: Add synthetic attachment metadata across pages/comments (API create/read/update, fixture import/export, deterministic generator output, and seed defaults).
+  Evidence: `src/notion_synth/models.py`, `src/notion_synth/db.py`, `src/notion_synth/routes.py`, `src/notion_synth/fixtures.py`, `src/notion_synth/generator.py`, `tests/test_api.py`, `tests/test_generator.py`.
+- [x] 2026-02-11: Add richer search endpoints beyond pages (`GET /search/comments`, `GET /search/rows`) with `include_total` and `include_pagination` support.
+  Evidence: `src/notion_synth/routes.py`, `tests/test_api.py`, `README.md`, `scripts/demo_smoke.py`.
 - [x] 2026-02-10: Add CLI `packs` commands (`notion-synth packs list`, `notion-synth packs apply`) that operate on the local DB without running the API server (with `--dry-run` preview + `--confirm` guard).
   Evidence: `src/notion_synth/cli.py`, `tests/test_cli_packs_profiles.py`, `README.md`.
 - [x] 2026-02-10: Add CLI discoverability for generator profiles (`notion-synth profiles list`) and document recommended pack/profile usage in README.
@@ -80,6 +111,8 @@
 - CI on `main` is green as of 2026-02-08/2026-02-09; the earlier failures in early February are now addressed by shipped fixes and regression tests.
 - CI secret scans can fail with shallow clones because gitleaks scans commit ranges on push; use `fetch-depth: 0` for reliable history-range scanning.
 - Market scan (bounded): mock API tools in this segment emphasize OpenAPI-first ergonomics, rule-based matching, dynamic templating, proxying, and opt-in failure simulation (examples: https://mockoon.com/docs/latest/ and https://mockoon.com/mock-samples/notion-api/).
+- Market scan (bounded): Mockoon treats dynamic response templating and scoped variables/data buckets as a baseline capability for realistic synthetic payloads, which aligns with continuing investment in deterministic-yet-realistic fixture generation (https://mockoon.com/docs/latest/templating/mockoon-variables/).
+- Market scan (bounded): Mockoon route-response rules highlight configurable latency and conditional response behavior as expected ergonomics for API simulation workflows (https://mockoon.com/docs/latest/routes/response/).
 - Market scan (bounded): WireMock highlights explicit fault/latency injection as a first-class mocking feature (e.g. fixed delays, jitter distributions, chunked responses), reinforcing the value of an env-guarded `delay_ms`/`fail_rate` feature for demos/tests (https://wiremock.org/docs/simulating-faults/).
 - Market scan (bounded): Prism positions OpenAPI-driven dynamic mock responses plus request/response validation as baseline expectations for API-mocking workflows (https://stoplight.io/open-source/prism).
 - Market scan (bounded): Self-hosted mock tools commonly ship Docker images and document container networking gotchas (e.g., Prism notes `-h 0.0.0.0` is required for reachability from outside the container), reinforcing the value of “safe by default” localhost bindings in demo Compose stacks (https://hub.docker.com/r/stoplight/prism/).
@@ -87,9 +120,9 @@
 - Market scan (bounded): Postman mock servers support simulated delay via `x-mock-response-delay` for response simulation/testing workflows (https://learning.postman.com/docs/designing-and-developing-your-api/mocking-data/mocking-with-examples/).
 - Market scan (bounded): Notion’s public API documents a request limit of 3 requests per second per integration (https://developers.notion.com/reference/request-limits).
 - Gap map:
-  Missing: fixture packs; synthetic file attachments metadata; ingest API for external fixtures; structured error shape.
-  Weak (now improved): local demo ergonomics (Docker Compose, optional CORS), deletion safety previews, and OpenAPI examples for common write payloads.
-  Parity (now improved): fixtures import/export, seeded demo data, basic list filtering, pagination metadata, page search, admin reset, fault injection.
+  Missing: ingest API v2 (partial fixture + strict unknown-field rejection), non-engineering generator profiles, and explicit CI smoke workflow job.
+  Weak: search relevance ranking for comments/rows (currently LIKE-based); fixture ingest validation depth for partially trusted external payloads.
+  Parity (now improved): attachment metadata on pages/comments, cross-entity search endpoints, fixtures import/export, seeded demo data, list filtering/pagination metadata, admin reset, fault injection, Docker on-ramp.
   Differentiator: deterministic enterprise dataset generator + Entra/Notion apply workflows.
 
 ## Notes

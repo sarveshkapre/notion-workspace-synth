@@ -148,6 +148,30 @@ This file is intentionally lightweight and append-only. It captures decisions an
 - Trust: `local`
 - Confidence: `high`
 
+### 2026-02-11: Add attachment metadata across pages/comments
+- Decision: add attachment metadata support to pages/comments with a minimal schema (`id`, `name`, `mime_type`, `size_bytes`, optional `external_url`) across API CRUD, fixture import/export, seeded demo data, and deterministic generator outputs.
+- Why: attachment metadata is a baseline parity expectation for Notion-like content models and improves downstream integration realism without adding blob storage complexity.
+- Evidence: `src/notion_synth/models.py`, `src/notion_synth/db.py`, `src/notion_synth/routes.py`, `src/notion_synth/fixtures.py`, `src/notion_synth/generator.py`, `tests/test_api.py`, `tests/test_generator.py`.
+- Commit: `34b1084`
+- Trust: `trusted (local)`
+- Confidence: `high`
+
+### 2026-02-11: Add richer search endpoints for comments and rows
+- Decision: add `GET /search/comments` and `GET /search/rows` with optional filters and consistent metadata behavior (`include_total`, `include_pagination`) aligned with existing list/search endpoints.
+- Why: users expect search beyond pages for practical demo/testing workflows; this closes a key parity gap with API mocking tools.
+- Evidence: `src/notion_synth/routes.py`, `tests/test_api.py::test_search_comments_and_rows`, `README.md`.
+- Commit: `34b1084`
+- Trust: `trusted (local)`
+- Confidence: `high`
+
+### 2026-02-11: Make smoke flow resilient to pack-specific seeded IDs
+- Decision: update `scripts/demo_smoke.py` to use IDs discovered at runtime (workspace/user/page) and search assertions that do not depend on fixed row IDs.
+- Why: pack application replaces the DB with generated IDs, so hard-coded seeded IDs caused false-negative smoke failures.
+- Evidence: `scripts/demo_smoke.py`, `make smoke`.
+- Commit: `34b1084`
+- Trust: `trusted (local)`
+- Confidence: `high`
+
 ## Verification Evidence
 - `make check` (pass) on 2026-02-09.
 - `make check` (pass) on 2026-02-09 (pagination headers).
@@ -229,8 +253,25 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `gh run watch 21859599119 --exit-status` (commit `02f0f62`)
 - CI (pass) on 2026-02-10:
   - `gh run watch 21859632515 --exit-status` (commit `dba5e5d`)
+- `.venv/bin/pytest -q tests/test_api.py tests/test_generator.py tests/test_packs.py tests/test_cli_packs_profiles.py` (pass) on 2026-02-11.
+- `.venv/bin/pytest -q tests/test_providers.py tests/test_provisioning.py tests/test_blueprint.py` (pass) on 2026-02-11.
+- `make check` (pass) on 2026-02-11.
+- `make security` (pass) on 2026-02-11.
+- `make smoke` (fail) on 2026-02-11:
+  - `POST /comments` returned `400 Invalid page_id` after pack apply because the smoke script assumed seeded IDs.
+- `make smoke` (fail) on 2026-02-11:
+  - `GET /search/rows?q=Prototype` returned an empty set because pack rows are generated and do not guarantee that term.
+- `make smoke` (pass) on 2026-02-11:
+  - `make smoke` (updated script uses runtime IDs + robust row-search assertion).
+- CI (pass) on 2026-02-11:
+  - `gh run watch 21897223688 --exit-status` (commit `34b1084`)
 
 ## Mistakes And Fixes
+- 2026-02-11: `make smoke` regressed after pack-apply due hard-coded seeded IDs and brittle row-search assumptions.
+  - Root cause: smoke script posted comments to `page_home`/`user_alex` after replacing the DB with pack data and expected a fixed row identifier/content pattern.
+  - Prevention rule: smoke tests must resolve IDs from runtime API responses after any reset/pack operation and assert on invariants, not hard-coded synthetic IDs.
+  - Evidence: `scripts/demo_smoke.py`, `make smoke`.
+  - Trust: `trusted (local)`
 - 2026-02-09: Gitleaks secret scan failed in CI due to shallow checkout; fixed by setting `actions/checkout` `fetch-depth: 0`.
   - Root cause: gitleaks scans a git commit range on push; with depth=1 the base commit is missing and `git log` fails.
   - Prevention rule: run history-range scanners (gitleaks, release tooling) only with full history in CI.

@@ -2,6 +2,17 @@
 
 This file records real failures/regressions and the prevention rules adopted after fixing them.
 
+## 2026-02-11: Smoke verification regressed after pack reset due hard-coded IDs
+- Impact: `make smoke` failed despite healthy API behavior, reducing confidence in release verification for pack-based datasets.
+- Detection: Local `make smoke` during cycle-1 maintenance run on 2026-02-11.
+- Root cause: smoke flow posted a comment to seeded IDs (`page_home`, `user_alex`) after `admin/apply-pack`, which replaces DB contents with generated IDs; row-search assertion also depended on a non-guaranteed term.
+- Fix: smoke script now resolves runtime IDs (`workspace`, `users`, created page) and asserts row search on a stable invariant (`property_name=Name&q=Project`).
+- Prevention rules:
+  - Never use hard-coded seeded IDs in smoke paths after reset/pack operations.
+  - Assert smoke outcomes on guaranteed invariants, not brittle generated IDs/content.
+- Evidence: `scripts/demo_smoke.py`, `make smoke`.
+- Trust: `local` (fix + verification)
+
 ## 2026-02-08: CI failed due to hard `.venv` dependency in Make targets
 - Impact: GitHub Actions runs failed before lint/tests, masking additional quality issues.
 - Detection: CI failures on `main` between 2026-02-01 and 2026-02-03 (GitHub Actions).
