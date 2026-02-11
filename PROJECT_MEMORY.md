@@ -265,6 +265,8 @@ This file is intentionally lightweight and append-only. It captures decisions an
   - `make smoke` (updated script uses runtime IDs + robust row-search assertion).
 - CI (pass) on 2026-02-11:
   - `gh run watch 21897223688 --exit-status` (commit `34b1084`)
+- CI (pass) on 2026-02-11:
+  - `gh run watch 21897263912 --exit-status` (commit `cd0dec1`)
 
 ## Mistakes And Fixes
 - 2026-02-11: `make smoke` regressed after pack-apply due hard-coded seeded IDs and brittle row-search assumptions.
