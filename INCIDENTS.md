@@ -46,3 +46,14 @@ This file records real failures/regressions and the prevention rules adopted aft
   - When `actions/checkout` fails with clear infrastructure HTTP 5xx, rerun before making product code changes.
 - Evidence: `.github/workflows/ci.yml`, `gh run view 21833223544 --log-failed`, `gh run watch 21833968192 --exit-status`.
 - Trust: `local` (workflow change), `external` (CI failure + recovery)
+
+### 2026-02-12T20:01:11Z | Codex execution failure
+- Date: 2026-02-12T20:01:11Z
+- Trigger: Codex execution failure
+- Impact: Repo session did not complete cleanly
+- Root Cause: codex exec returned a non-zero status
+- Fix: Captured failure logs and kept repository in a recoverable state
+- Prevention Rule: Re-run with same pass context and inspect pass log before retrying
+- Evidence: pass_log=logs/20260212-101456-notion-workspace-synth-cycle-2.log
+- Commit: pending
+- Confidence: medium
