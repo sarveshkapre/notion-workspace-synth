@@ -9,16 +9,46 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
         with:
-          # gitleaks scans git history ranges on push; depth=1 can make the commit range ambiguous.
-          # Avoid full-history fetches (depth=0) which are slower and can be more prone to transient fetch failures.
           fetch-depth: 50
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Runner preflight
+        run: |
+          set -euo pipefail
+          for cmd in git make curl tar; do
+            if ! command -v "$cmd" >/dev/null 2>&1; then
+              echo "Missing required command: $cmd"
+              exit 1
+            fi
+          done
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION="8.24.2"
+          OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            x86_64) ARCH="x64" ;;
+            arm64|aarch64) ARCH="arm64" ;;
+            *) echo "Unsupported architecture: $ARCH" && exit 1 ;;
+          esac
+          if [ "$OS" = "darwin" ] || [ "$OS" = "linux" ]; then
+            ASSET="gitleaks_${GITLEAKS_VERSION}_${OS}_${ARCH}.tar.gz"
+          else
+            echo "Unsupported OS: $OS"
+            exit 1
+          fi
+          URL="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${ASSET}"
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          curl -fsSL "$URL" -o "$RUNNER_TEMP/gitleaks/gitleaks.tar.gz"
+          tar -xzf "$RUNNER_TEMP/gitleaks/gitleaks.tar.gz" -C "$RUNNER_TEMP/gitleaks"
+          chmod +x "$RUNNER_TEMP/gitleaks/gitleaks"
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -28,4 +58,4 @@ jobs:
       - name: Security checks
         run: make security
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
+        run: gitleaks dir . --redact --exit-code 1

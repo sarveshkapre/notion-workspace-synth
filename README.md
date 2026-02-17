@@ -257,3 +257,14 @@ the persisted DB (you can later reset/apply packs via admin endpoints).
 ## Repo docs
 All repository docs (except this README) live in `docs/`. See `docs/ENTERPRISE.md` for enterprise
 usage guidance.
+
+## CI on Self-Hosted Runners
+GitHub Actions CI is configured with `runs-on: self-hosted`.
+
+Runner setup and registration steps:
+- `docs/SELF_HOSTED_RUNNER.md`
+
+Local runner-equivalent smoke check:
+```bash
+scripts/ci_self_hosted_smoke.sh
+```
